@@ -1,3 +1,19 @@
+overrides:
+  # Firebase's Node Firestore adapter pins a gRPC version affected by
+  # GHSA-m9gg-hp2v-232j and GHSA-f596-whhp-79r4. Keep the override scoped.
+  "@firebase/firestore@4.19.0>@grpc/grpc-js": "1.14.7"
+  # This metadata release pins gaxios 7.1.3, which pulls vulnerable glob and
+  # minimatch via rimraf. A same-major gaxios update removes that dependency.
+  "gcp-metadata@8.1.4>gaxios": "7.3.1"
+  # GAX 5 also depends on rimraf directly. Its glob/globSync API is retained
+  # in glob 14; this scoped override addresses GHSA-3g3m-2fjr-6pw4 and uses
+  # the patched minimatch 11 without overriding older ESLint APIs globally.
+  "rimraf@5.0.10>glob": "14.0.2"
+
 allowBuilds:
+  "@firebase/util": false
+  "@google/genai": false
+  esbuild: false
+  protobufjs: false
   sharp: false
   unrs-resolver: false

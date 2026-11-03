@@ -1,26 +1,113 @@
 @import "tailwindcss";
 
+/**
+ * Sistem Desain Tunggal Patungin ("Clean Paper & Ink")
+ * Tidak ada mode gelap/terang (single theme only) sesuai keputusan produk.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
+
+  /* Core Canvas & Surface */
+  --bg-canvas: #f4f7fc;
+  --bg-surface: #ffffff;
+  --bg-subtle: #eaf0fa;
+
+  /* Borders & Dividers */
+  --border-default: #d8e2f2;
+  --border-focus: #2855d9;
+
+  /* Ink / Typography */
+  --ink-primary: #17233b;
+  --ink-secondary: #4a5b7c;
+  --ink-muted: #7687a6;
+
+  /* Actions */
+  --action-primary: #2855d9;
+  --action-hover: #1e44b8;
+  --action-soft: #e6edff;
+
+  /* Semantic Status */
+  --status-success-bg: #e6f5ef;
+  --status-success-ink: #146346;
+  --status-warn-bg: #fff3e6;
+  --status-warn-ink: #9a4a12;
+  --status-danger-bg: #fdecec;
+  --status-danger-ink: #b42318;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-canvas: var(--bg-canvas);
+  --color-surface: var(--bg-surface);
+  --color-subtle: var(--bg-subtle);
+  --color-border-default: var(--border-default);
+  --color-border-focus: var(--border-focus);
+  --color-ink-primary: var(--ink-primary);
+  --color-ink-secondary: var(--ink-secondary);
+  --color-ink-muted: var(--ink-muted);
+  --color-action-primary: var(--action-primary);
+  --color-action-hover: var(--action-hover);
+  --color-action-soft: var(--action-soft);
+  --color-success-bg: var(--status-success-bg);
+  --color-success-ink: var(--status-success-ink);
+  --color-warn-bg: var(--status-warn-bg);
+  --color-warn-ink: var(--status-warn-ink);
+  --color-danger-bg: var(--status-danger-bg);
+  --color-danger-ink: var(--status-danger-ink);
+  --font-sans: var(--font-source-sans), system-ui, -apple-system, sans-serif;
+  --font-display: var(--font-manrope), system-ui, -apple-system, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+html,
+body {
+  background-color: var(--bg-canvas);
+  color: var(--ink-primary);
+  font-family: var(--font-source-sans), system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* Angka uang selalu rata kolom (tabular-nums) agar mudah dibandingkan di struk */
+.tabular-money {
+  font-family: var(--font-manrope), system-ui, -apple-system, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Fokus aksesibilitas yang jelas untuk navigasi keyboard (WCAG 2.2 AA) */
+:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+button, a, input, select, summary {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+input, select, textarea {
+  min-width: 0;
+}
+
+@media (pointer: coarse) {
+  input, select, textarea {
+    font-size: 16px;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -10,8 +10,9 @@
 !.yarn/releases
 !.yarn/versions
 
-# testing
-/coverage
+# testing and local browser artifacts
+/coverage/
+/.playwright-cli/
 
 # next.js
 /.next/
@@ -23,15 +24,28 @@
 # misc
 .DS_Store
 *.pem
+*.key
+*.p12
+*.pfx
 
 # debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+firebase-debug*.log
+firestore-debug*.log
+ui-debug*.log
 
-# env files (can opt-in for committing if needed)
+# environment (keep the configuration template)
 .env*
+!.env.example
+
+# local dev sandbox data & service account keys
+.patungin-dev-data.json
+*firebase-adminsdk*.json
+service-account*.json
+/.firebase/
 
 # vercel
 .vercel
@@ -39,3 +53,13 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Keep the shared index checker required by the test suite; other local CLIs stay private.
+/scripts/*
+!/scripts/check-firestore-indexes.mjs
+
+# Generated output is intentionally not published.
+/output/
+
+# Stray browser automation error output
+/r.cssText)

@@ -1,0 +1,426 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "bills",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ownerUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "bills",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ownerUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "scanAttempts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ownerUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "reservedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "accountAudits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ownerUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "accessUntil",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "adminUserMonths",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "monthKey",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "lowQuota",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "adminUserMonths",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "monthKey",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "frequentFailures",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "scanAttempts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "state",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "reservedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "scanAttempts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "applicationOutcome",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "reservedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "operationalEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "level",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "firstAt",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "bills",
+      "fieldPath": "items",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "bills",
+      "fieldPath": "participants",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "bills",
+      "fieldPath": "allocations",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "bills",
+      "fieldPath": "adjustments",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "bills",
+      "fieldPath": "finalResult",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "bills",
+      "fieldPath": "paymentMethods",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "bills",
+      "fieldPath": "extractionWarnings",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "shares",
+      "fieldPath": "publicProjection",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "finalizations",
+      "fieldPath": "inputSnapshot",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "finalizations",
+      "fieldPath": "calculationResult",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "finalizations",
+      "fieldPath": "paymentMethods",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "scanAttempts",
+      "fieldPath": "extractedData",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "usageMonths",
+      "fieldPath": "userAttempts",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "usageMonths",
+      "fieldPath": "userBonuses",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "usageMonths",
+      "fieldPath": "userMinuteWindows",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "usageMonths",
+      "fieldPath": "activeLeases",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "usageMonths",
+      "fieldPath": "activeLeaseOwners",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "users",
+      "fieldPath": "claimFailures",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "users",
+      "fieldPath": "claimWindowAt",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "shares",
+      "fieldPath": "deleteAfter",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "scanAttempts",
+      "fieldPath": "deleteAfter",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "usageMonths",
+      "fieldPath": "deleteAfter",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "accountAudits",
+      "fieldPath": "before",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "accountAudits",
+      "fieldPath": "after",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "accountAudits",
+      "fieldPath": "actorUid",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "accountAudits",
+      "fieldPath": "actorEmail",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "accountAudits",
+      "fieldPath": "monthKey",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "adminUserMonths",
+      "fieldPath": "uid",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "adminUserMonths",
+      "fieldPath": "used",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "adminUserMonths",
+      "fieldPath": "remaining",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "adminUserMonths",
+      "fieldPath": "completed",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "adminUserMonths",
+      "fieldPath": "failed",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "adminUserMonths",
+      "fieldPath": "resultsSince",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "adminUserMonths",
+      "fieldPath": "updatedAt",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "accountAudits",
+      "fieldPath": "deleteAfter",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "adminUserMonths",
+      "fieldPath": "deleteAfter",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "adminUserMonths",
+      "fieldPath": "monthKey",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "adminUserMonths",
+      "fieldPath": "lowQuota",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "adminUserMonths",
+      "fieldPath": "frequentFailures",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "accountAudits",
+      "fieldPath": "ownerUid",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "operationalEvents",
+      "fieldPath": "ownerUid",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "operationalEvents",
+      "fieldPath": "code",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "operationalEvents",
+      "fieldPath": "flag",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "operationalEvents",
+      "fieldPath": "stage",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "operationalEvents",
+      "fieldPath": "lastAt",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "operationalEvents",
+      "fieldPath": "count",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "operationalEvents",
+      "fieldPath": "requestId",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "operationalEvents",
+      "fieldPath": "billId",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "operationalEvents",
+      "fieldPath": "attemptId",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "operationalEvents",
+      "fieldPath": "providerCalled",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "operationalEvents",
+      "fieldPath": "quotaReserved",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "operationalEvents",
+      "fieldPath": "deleteAfter",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "scanAttempts",
+      "fieldPath": "requestId",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "operationalEvents",
+      "fieldPath": "subjectUid",
+      "indexes": []
+    }
+  ]
+}
