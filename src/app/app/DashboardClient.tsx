@@ -12,6 +12,7 @@ import { AppHeader } from "@/components/product/AppHeader";
 import ui from "@/components/product/product.module.css";
 
 interface DashboardClientProps {
+  receiptsEnabled: boolean;
   host: {
     uid: string;
     email: string;
@@ -35,6 +36,7 @@ export function DashboardClient({
   hasMoreBills,
   latestDraft: initialLatestDraft,
   quotaStatus,
+  receiptsEnabled,
 }: DashboardClientProps) {
   const router = useRouter();
   const [deletedIds, setDeletedIds] = useState<string[]>([]);
@@ -100,7 +102,7 @@ export function DashboardClient({
             {errorBanner}
           </p>
         )}
-        <NewBillClient embedded quotaStatus={quotaStatus} />
+        <NewBillClient embedded quotaStatus={quotaStatus} receiptsEnabled={receiptsEnabled} />
         {latestDraft && (
           <section className={ui.resume} aria-labelledby="resume-heading">
             <div>

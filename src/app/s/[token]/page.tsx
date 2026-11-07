@@ -42,5 +42,5 @@ export default async function PublicSharePage({
     );
   }
 
-  return <PublicShareClient projection={projection} />;
+  return <PublicShareClient projection={projection} shareToken={token} />;
 }

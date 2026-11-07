@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useRef, useState, useSyncExternalStore } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -9,14 +9,10 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
-  Eye,
-  Image as ImageIcon,
   Plus,
   ReceiptText,
   Sparkles,
   Trash2,
-  ZoomIn,
-  ZoomOut,
 } from "lucide-react";
 import { reopenBillAction } from "@/app/actions/bills";
 import { calculateBillForReview } from "@/domain/billing/calculation";
@@ -33,18 +29,17 @@ import type {
 } from "@/domain/billing/types";
 import { MoneyInput } from "@/components/MoneyInput";
 import { StepIntro, StepHeader } from "@/components/StepHeader";
+import { OwnerReceiptPhoto } from "@/components/OwnerReceiptPhoto";
+import type { ReceiptPhotoInfo } from "@/domain/receipts";
 import { useBillDraft } from "@/components/useBillDraft";
 
 interface ReviewClientProps {
   initialBill: BillDocument;
+  initialPhoto: ReceiptPhotoInfo;
+  photoNotSaved?: boolean;
 }
 
-function subscribeToStorage(onChange: () => void) {
-  window.addEventListener("storage", onChange);
-  return () => window.removeEventListener("storage", onChange);
-}
-
-export function ReviewClient({ initialBill }: ReviewClientProps) {
+export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: ReviewClientProps) {
   const router = useRouter();
   const { bill, saveStatus, saveError, updateBillState, saveNow, replaceBill } =
     useBillDraft(initialBill, (current) => ({
@@ -59,33 +54,13 @@ export function ReviewClient({ initialBill }: ReviewClientProps) {
       confirmedGrandTotal: current.confirmedGrandTotal,
     }));
 
-  // Foto referensi dari sessionStorage (atau pilih ulang tanpa panggil OCR)
-  const storedReferencePhoto = useSyncExternalStore(
-    subscribeToStorage,
-    () => {
-      try {
-        return sessionStorage.getItem(
-          `patungin_receipt_photo_${initialBill.id}`,
-        );
-      } catch {
-        return null;
-      }
-    },
-    () => null,
-  );
-  const [selectedReferencePhoto, setReferencePhoto] = useState<string | null>(
-    null,
-  );
-  const referencePhoto = selectedReferencePhoto ?? storedReferencePhoto;
-  const [showPhotoPanel, setShowPhotoPanel] = useState(false);
-  const [photoZoom, setPhotoZoom] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [proceedPending, setProceedPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [expandedItemDetails, setExpandedItemDetails] = useState<
     Record<string, boolean>
   >({});
 
-  const refPhotoInput = useRef<HTMLInputElement | null>(null);
   const idSeqRef = useRef<number>(100);
 
   // Hitung rekonsiliasi secara langsung dengan mesin hitung domain yang sama dengan server
@@ -122,40 +97,6 @@ export function ReviewClient({ initialBill }: ReviewClientProps) {
         !isValidIdrInteger(adj.amount) && adj.amountSource === "observed",
     );
   const lineRecovery = proposeLineAmountRecovery({ ...bill });
-
-  const handleReferencePhotoSelect = (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    if (
-      !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
-      file.size > 8 * 1024 * 1024
-    ) {
-      setActionError("Pilih foto JPG, PNG, atau WebP berukuran maksimal 8 MB.");
-      return;
-    }
-    setActionError(null);
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        setReferencePhoto(reader.result);
-        setShowPhotoPanel(true);
-        try {
-          sessionStorage.setItem(
-            `patungin_receipt_photo_${bill.id}`,
-            reader.result,
-          );
-        } catch {
-          // Abaikan
-        }
-      }
-    };
-    reader.onerror = () =>
-      setActionError("Foto belum bisa dibuka. Pilih foto lagi.");
-    reader.readAsDataURL(file);
-  };
 
   const handleAddItem = () => {
     const nextOrder =
@@ -368,11 +309,17 @@ export function ReviewClient({ initialBill }: ReviewClientProps) {
         onRetrySave={() => {
           void saveNow();
         }}
-        onBeforeNavigate={async () => Boolean(await saveNow())}
+        onBeforeNavigate={async () => !photoBusy && Boolean(await saveNow())}
       />
 
       <main id="bill-content" tabIndex={-1} className={ui.main}>
         <StepIntro activeStep="review" />
+        <section className={`${ui.panel} space-y-3`}>
+          <h2 className={ui.sectionTitle}>Foto struk</h2>
+          {photoNotSaved && !bill.receiptPhotoId && <p role="alert" className="text-xs text-[#9A4A12]">Foto belum tersimpan untuk perangkat lain. Pilih ulang foto di sini tanpa scan ulang.</p>}
+          <OwnerReceiptPhoto bill={bill} initialPhoto={initialPhoto} prepareBill={() => saveNow()} onChange={replaceBill} onBusy={setPhotoBusy} />
+        </section>
+        <fieldset disabled={photoBusy} className="contents">
         {actionError && (
           <p className={ui.error} role="alert">
             {actionError}
@@ -487,85 +434,7 @@ export function ReviewClient({ initialBill }: ReviewClientProps) {
             <div className="flex items-center gap-2">
               <h2 className={ui.sectionTitle}>Info tagihan</h2>
             </div>
-            <div className="flex items-center gap-2">
-              <input
-                ref={refPhotoInput}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={handleReferencePhotoSelect}
-                className="hidden"
-              />
-              {referencePhoto ? (
-                <button
-                  type="button"
-                  onClick={() => setShowPhotoPanel((v) => !v)}
-                  className="min-h-[44px] px-3 py-1.5 rounded-xl bg-[#E6EDFF] text-[#1E44B8] font-bold text-xs inline-flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Eye className="w-3.5 h-3.5" aria-hidden="true" />
-                  {showPhotoPanel ? "Tutup foto" : "Lihat foto struk"}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => refPhotoInput.current?.click()}
-                  className="min-h-[44px] px-3 py-1.5 rounded-xl bg-[#F4F7FC] hover:bg-[#EAF0FA] border border-[#D8E2F2] text-[#4A5B7C] font-bold text-xs inline-flex items-center gap-1.5 cursor-pointer"
-                  title="Tampilkan foto untuk mencocokkan struk"
-                >
-                  <ImageIcon
-                    className="w-3.5 h-3.5 text-[#2855D9]"
-                    aria-hidden="true"
-                  />
-                  Pilih foto struk
-                </button>
-              )}
-            </div>
           </div>
-
-          {showPhotoPanel && referencePhoto && (
-            <div className="rounded-2xl bg-[#F4F7FC] border border-[#D8E2F2] p-3 space-y-2.5">
-              <div className="flex items-center justify-between text-xs text-[#4A5B7C]">
-                <span className="font-semibold text-[#17233B]">Foto struk</span>
-                <div className="flex items-center gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => setPhotoZoom((z) => !z)}
-                    className="inline-flex items-center gap-1 font-bold text-[#2855D9] cursor-pointer"
-                  >
-                    {photoZoom ? (
-                      <>
-                        <ZoomOut className="w-3.5 h-3.5" aria-hidden="true" />{" "}
-                        Perkecil
-                      </>
-                    ) : (
-                      <>
-                        <ZoomIn className="w-3.5 h-3.5" aria-hidden="true" />{" "}
-                        Perbesar
-                      </>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => refPhotoInput.current?.click()}
-                    className="font-semibold text-[#4A5B7C] hover:underline cursor-pointer"
-                  >
-                    Ganti
-                  </button>
-                </div>
-              </div>
-              <div className="overflow-auto max-h-[340px] rounded-xl bg-white border border-[#D8E2F2] p-2 flex justify-center">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={referencePhoto}
-                  alt="Referensi struk"
-                  className={
-                    photoZoom
-                      ? "w-[800px] max-w-none object-contain"
-                      : "max-h-[300px] w-auto object-contain"
-                  }
-                />
-              </div>
-            </div>
-          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="min-w-0">
@@ -1500,6 +1369,7 @@ export function ReviewClient({ initialBill }: ReviewClientProps) {
               </ul>
             </aside>
           )}
+        </fieldset>
       </main>
 
       <ActionBar
@@ -1518,9 +1388,9 @@ export function ReviewClient({ initialBill }: ReviewClientProps) {
             : formatRupiah(calc.computedGrandTotal)
         }
         label="Lanjut bagi pesanan"
-        pending={proceedPending}
+        pending={proceedPending || photoBusy}
         disabled={
-          hasMissingAmounts ||
+          photoBusy || hasMissingAmounts ||
           bill.items.some((item) => !item.name.trim()) ||
           reviewIssues.some((issue) => issue.severity === "error")
         }

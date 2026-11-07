@@ -93,11 +93,11 @@ Reservasi kuota dan slot aktif dilakukan sebelum memanggil Gemini, dengan penang
 
 Hasil final mencakup input yang diperiksa, hasil hitung, dan informasi pembayaran saat finalisasi. Membuka ulang tagihan mencabut link aktif. Selama tagihan kembali menjadi draft, halaman hasil menunggu pengguna menyelesaikan perubahan dan melakukan finalisasi kembali.
 
-Server hanya membagikan data yang diperlukan untuk melihat rincian patungan. Link dilindungi token acak bertanda tangan. Setiap kali link dibuka, server memeriksa masa berlaku, status pencabutan, status tagihan, dan akses pemilik. Foto struk serta email akun pemilik tidak ikut ditampilkan.
+Server hanya membagikan data yang diperlukan untuk melihat rincian patungan. Link dilindungi token acak bertanda tangan. Setiap kali link dibuka, server memeriksa masa berlaku, status pencabutan, status tagihan, dan akses pemilik. Foto hanya ikut jika dipilih host sebelum finalisasi dan masa akses 24 jam sejak unggah masih berlaku. Email akun pemilik tidak ditampilkan. Setup storage, scheduler, retensi, dan rollback dijelaskan di [panduan foto sementara](receipt-storage.md).
 
 Untuk menghentikan seluruh akses link publik, atur `SHARE_LINKS_ENABLED=false` lalu restart atau deploy ulang. Pembuatan link baru dan pembukaan link lama ditolak; penolakan pembukaan dilakukan sebelum membaca database. Mengaktifkannya kembali dengan secret yang sama memulihkan akses link yang masih valid dan belum dicabut. Gunakan pencabutan pada tagihan untuk menonaktifkan satu link secara permanen.
 
-Informasi pembayaran disimpan dalam `paymentMethods`. QRIS berupa petunjuk meminta kode melalui chat, bukan penyimpanan gambar QRIS. Sampai 10 tujuan pembayaran dapat dicantumkan dalam hasil.
+Informasi pembayaran disimpan dalam `paymentMethods`. QRIS dapat memakai gambar privat yang diunggah melalui Pengaturan; data lama berupa petunjuk chat tetap didukung. Gambar mengikuti referensi profil/tagihan, terpisah dari expiry foto struk 24 jam. Sampai 10 tujuan pembayaran dapat dicantumkan dalam hasil. Lihat [panduan QRIS/storage](receipt-storage.md).
 
 Menghapus tagihan juga membersihkan link berbagi, data finalisasi terkait, dan scan yang telah selesai. Scan yang masih berjalan dipertahankan sementara untuk melepas slot aktif, lalu dihapus saat selesai jika tagihan sudah tidak ada. Kuota yang sudah digunakan tidak dikembalikan.
 

@@ -40,6 +40,7 @@ export function AppHeader({
         <div className={ui.account}>
           {!hideNavigation && <nav className={ui.navigation} aria-label="Navigasi aplikasi">
             {admin && <Link href="/admin">Kelola</Link>}
+            <Link href="/settings/payments">Pengaturan</Link>
             {history ? (
               <Link href="/app">Tagihan saya</Link>
             ) : (

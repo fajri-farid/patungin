@@ -8,6 +8,11 @@ import React, {
   useEffect,
 } from "react";
 import Link from "next/link";
+import { SavedPaymentPicker } from "@/components/SavedPaymentPicker";
+import { OwnerReceiptPhoto } from "@/components/OwnerReceiptPhoto";
+import { usePhotoAvailable } from "@/components/ReceiptPhoto";
+import { loadReceiptState } from "@/lib/receipt-photo-client";
+import type { ReceiptPhotoInfo } from "@/domain/receipts";
 import {
   AlertTriangle,
   Check,
@@ -67,6 +72,8 @@ import {
 } from "@/domain/billing/payment";
 
 interface ResultClientProps {
+  initialPhoto: ReceiptPhotoInfo;
+  photoSharingEnabled: boolean;
   initialBill: BillDocument;
   initialSnapshot: FinalizationSnapshot | null;
   initialShareToken: string | null;
@@ -80,8 +87,15 @@ export function ResultClient({
   initialShareToken,
   appOrigin,
   shareLinksEnabled,
+  initialPhoto,
+  photoSharingEnabled,
 }: ResultClientProps) {
   const [bill, setBill] = useState<BillDocument>(initialBill);
+  const [photoInfo, setPhotoInfo] = useState(initialPhoto);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [pickerBusy, setPickerBusy] = useState(false);
+  const [shareReceiptPhoto, setShareReceiptPhoto] = useState(initialBill.shareReceiptPhoto === true);
+  const photoAvailable = usePhotoAvailable(photoInfo) && !!bill.receiptPhotoId;
   const [, setSnapshot] = useState<FinalizationSnapshot | null>(
     initialSnapshot,
   );
@@ -193,7 +207,7 @@ export function ResultClient({
   );
 
   const savePaymentBeforeNavigation = async () => {
-    if (isPending || paymentSaveInFlight.current) return false;
+    if (isPending || photoBusy || pickerBusy || paymentSaveInFlight.current) return false;
     if (bill.status === "finalized" || saveStatus === "saved") return true;
     let normalized: PaymentMethodNote[];
     try {
@@ -213,6 +227,7 @@ export function ResultClient({
       const response = await saveDraftAction(bill.id, {
         expectedRevision: bill.revision,
         paymentMethods: normalized,
+        shareReceiptPhoto: shareReceiptPhoto && photoAvailable && photoSharingEnabled,
       });
       if (!response.ok || !response.data) {
         setSaveStatus("error");
@@ -242,6 +257,7 @@ export function ResultClient({
   };
 
   const handleConfirmReviewAndFinalize = () => {
+    if (photoBusy || pickerBusy || isPending) return;
     setActionError(null);
     let normalized: PaymentMethodNote[];
     try {
@@ -275,6 +291,7 @@ export function ResultClient({
             scopeConfirmed: true,
           })),
           paymentMethods: normalized,
+        shareReceiptPhoto: shareReceiptPhoto && photoAvailable && photoSharingEnabled,
           markReviewConfirmed: true,
         });
         if (!saveRes.ok || !saveRes.data) {
@@ -438,6 +455,14 @@ export function ResultClient({
           activeStep="result"
           completed={bill.status === "finalized"}
         />
+        <fieldset disabled={isPending || pickerBusy} className={`${ui.panel} space-y-3`}>
+          <h2 className={ui.sectionTitle}>Foto struk</h2>
+          <OwnerReceiptPhoto bill={bill} initialPhoto={initialPhoto} prepareBill={async () => {
+            if (!(await savePaymentBeforeNavigation())) return null;
+            return (await loadReceiptState(bill.id)).bill;
+          }} onChange={(next, photo) => { setBill(next); setPhotoInfo(photo); }} onBusy={setPhotoBusy} />
+        </fieldset>
+        <fieldset disabled={photoBusy} className="contents">
         {actionError && (
           <div
             role="alert"
@@ -796,12 +821,12 @@ export function ResultClient({
             <div>
               <h2 className="text-sm font-extrabold font-display text-[#17233B]">
                 {bill.status === "draft"
-                  ? "Rekening pembayaran (opsional)"
+                  ? "Tujuan pembayaran (opsional)"
                   : "Cara bayar"}
               </h2>
               {bill.status === "draft" && (
                 <p className="text-xs text-[#4A5B7C] mt-0.5">
-                  Cantumkan rekening atau e-wallet agar teman tahu harus
+                  Cantumkan rekening, e-wallet, atau QRIS agar teman tahu harus
                   transfer ke mana.
                 </p>
               )}
@@ -817,6 +842,14 @@ export function ResultClient({
             </p>
           )}
 
+          {bill.status === "draft" && <SavedPaymentPicker disabled={isPending || photoBusy} onBusy={setPickerBusy} onUse={methods => {
+            const current = paymentMethods;
+            const signature = (method: PaymentMethodNote) => JSON.stringify([method.method, method.qrisImageId, method.bankOrWalletName?.trim(), method.accountNumber?.trim(), method.accountHolderName?.trim(), method.note?.trim() || ""]);
+            const seen = new Set(current.map(signature));
+            const additions = methods.filter(method => { const key = signature(method); if (seen.has(key)) return false; seen.add(key); return true; });
+            if (current.length + additions.length > 10) { setPaymentError("Maksimal 10 tujuan pembayaran per tagihan."); return; }
+            setPaymentMethods([...paymentMethods, ...additions]); setPaymentError(null); setSaveStatus("idle");
+          }} />}
           {bill.status === "draft" ? (
             <PaymentMethodsEditor
               value={paymentMethods}
@@ -839,6 +872,13 @@ export function ResultClient({
           )}
         </section>
 
+        {bill.status === "draft" && photoSharingEnabled && <section className={`${ui.panel} space-y-2`}>
+          <label className="flex items-start gap-3 text-sm font-bold">
+            <input type="checkbox" checked={shareReceiptPhoto && photoAvailable} disabled={isPending || !photoAvailable} onChange={event => { setShareReceiptPhoto(event.target.checked); setSaveStatus("idle"); }} />
+            <span>Sertakan foto struk di link berbagi</span>
+          </label>
+          <p className="text-xs text-[#4A5B7C]">{photoAvailable ? "Siapa pun yang memiliki link bisa melihat fotonya sampai masa 24 jam sejak unggah berakhir." : "Simpan foto yang masih berlaku untuk menyertakannya di link."}</p>
+        </section>}
         {bill.status === "draft" && (
           <section className={ui.notice}>
             <p className="text-xs sm:text-sm text-[#4A5B7C]">
@@ -861,8 +901,7 @@ export function ResultClient({
                 </h2>
                 <p className="text-xs text-[#4A5B7C] mt-0.5">
                   Siapa pun yang punya link bisa melihat rincian pesanan dan
-                  info pembayaran. Link berlaku 7 hari sejak dibuat. Foto struk
-                  dan email tidak ikut dibagikan.
+                  info pembayaran. Link berlaku 7 hari sejak dibuat. Foto hanya ikut jika kamu memilih, sampai masa akses fotonya berakhir. Email akun tidak ditampilkan.
                 </p>
               </div>
             </div>
@@ -974,6 +1013,7 @@ export function ResultClient({
                 ? "Menyimpan hasil…"
                 : ""}
         </p>
+        </fieldset>
       </main>
 
       {bill.status === "draft" && (
@@ -981,8 +1021,8 @@ export function ResultClient({
           title={hasBlockingIssues ? "Periksa rincian dulu" : "Siap disimpan"}
           detail={formatRupiah(calc.computedGrandTotal)}
           label={shareLinksEnabled ? "Simpan & buat link" : "Simpan hasil"}
-          pending={isPending}
-          disabled={hasBlockingIssues}
+          pending={isPending || photoBusy || pickerBusy}
+          disabled={hasBlockingIssues || photoBusy || pickerBusy}
           onClick={handleConfirmReviewAndFinalize}
         />
       )}

@@ -1,4 +1,5 @@
 import type { PaymentMethodNote } from "./types";
+import { QRIS_IMAGE_ID } from "../qris";
 
 /** Validate payment metadata and keep only fields belonging to the chosen method. */
 export function normalizePaymentNote(input: unknown): PaymentMethodNote | null {
@@ -20,7 +21,11 @@ export function normalizePaymentNote(input: unknown): PaymentMethodNote | null {
     return value.trim();
   };
   const note = field("note", 300);
-  if (method === "qris") return { method, note };
+  if (method === "qris") {
+    const qrisImageId = field("qrisImageId", 64);
+    if (qrisImageId && !QRIS_IMAGE_ID.test(qrisImageId)) throw new Error("Gambar QRIS tidak valid.");
+    return { method, note, ...(qrisImageId ? { qrisImageId } : {}) };
+  }
   const bankOrWalletName = field("bankOrWalletName", 80);
   const accountNumber = field("accountNumber", 64);
   const accountHolderName = field("accountHolderName", 100);

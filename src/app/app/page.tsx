@@ -7,6 +7,7 @@ import {
   listBillsByOwner,
 } from "@/server/store/repository";
 import { DashboardClient } from "./DashboardClient";
+import { getServerConfig } from "@/server/config/env";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Tagihan saya" };
@@ -36,6 +37,7 @@ export default async function AppHomePage() {
       hasMoreBills={!!billPage.nextCursor}
       latestDraft={latestDraft}
       quotaStatus={quotaStatus}
+      receiptsEnabled={getServerConfig().receipts.enabled}
     />
   );
 }

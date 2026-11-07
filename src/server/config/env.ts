@@ -8,9 +8,11 @@
  *   dan kredensial Firebase belum diisi. Tidak pernah aktif di production.
  */
 
+import "server-only";
 import { SHARE_LINK_EXPIRY_DAYS } from "@/domain/billing/types";
 
 export interface ServerConfig {
+  qris: { enabled: boolean; bucket: string; maxStored: number };
   nodeEnv: string;
   isProduction: boolean;
   isDevSandbox: boolean;
@@ -43,6 +45,16 @@ export interface ServerConfig {
     signingSecret: string;
     isConfigured: boolean;
     expiryDays: number;
+  };
+  receipts: {
+    enabled: boolean;
+    sharingEnabled: boolean;
+    bucket: string;
+    cleanupSecret: string;
+    hourlyUploadLimit: number;
+    maxStored: number;
+    publicReadsPerMinute: number;
+    deploymentReadsPerMinute: number;
   };
 }
 
@@ -123,6 +135,11 @@ export function getServerConfig(): ServerConfig {
   const isShareConfigured = effectiveShareSecret.length >= 32;
 
   return {
+    qris: {
+      maxStored: parsePositiveInt(process.env.QRIS_MAX_STORED_PER_USER, 30),
+      enabled: process.env.QRIS_IMAGES_ENABLED !== "false" && (isDevSandbox || (isFirebaseConfigured && !!(process.env.FIREBASE_QRIS_STORAGE_BUCKET?.trim() || process.env.FIREBASE_STORAGE_BUCKET?.trim()))),
+      bucket: process.env.FIREBASE_QRIS_STORAGE_BUCKET?.trim() || process.env.FIREBASE_STORAGE_BUCKET?.trim() || "",
+    },
     nodeEnv,
     isProduction,
     isDevSandbox,
@@ -162,6 +179,17 @@ export function getServerConfig(): ServerConfig {
       signingSecret: effectiveShareSecret,
       isConfigured: isShareConfigured,
       expiryDays: SHARE_LINK_EXPIRY_DAYS,
+    },
+    receipts: {
+      enabled: isDevSandbox ? process.env.RECEIPT_PHOTOS_ENABLED !== "false" :
+        process.env.RECEIPT_PHOTOS_ENABLED === "true" && !!process.env.FIREBASE_STORAGE_BUCKET?.trim() && isFirebaseConfigured,
+      sharingEnabled: process.env.RECEIPT_PHOTO_SHARING_ENABLED === "true",
+      bucket: process.env.FIREBASE_STORAGE_BUCKET?.trim() ?? "",
+      cleanupSecret: process.env.RECEIPT_CLEANUP_SECRET?.trim() ?? "",
+      hourlyUploadLimit: parsePositiveInt(process.env.RECEIPT_UPLOAD_HOURLY_LIMIT, 10),
+      maxStored: parsePositiveInt(process.env.RECEIPT_MAX_STORED_PER_USER, 30),
+      publicReadsPerMinute: parsePositiveInt(process.env.RECEIPT_PUBLIC_READS_PER_MINUTE, 60),
+      deploymentReadsPerMinute: parsePositiveInt(process.env.RECEIPT_DEPLOYMENT_READS_PER_MINUTE, 600),
     },
   };
 }

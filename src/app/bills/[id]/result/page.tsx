@@ -10,6 +10,7 @@ import {
   resolvePublicShareToken,
 } from "@/server/store/repository";
 import { ResultClient } from "./ResultClient";
+import { getOwnerPhotoInfo } from "@/server/receipts/photos";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Hasil pembagian" };
@@ -64,6 +65,8 @@ export default async function BillResultPage({
       initialShareToken={existingShareToken}
       appOrigin={config.appOrigin}
       shareLinksEnabled={config.share.linksEnabled}
+      initialPhoto={await getOwnerPhotoInfo(bill)}
+      photoSharingEnabled={config.receipts.sharingEnabled}
     />
   );
 }

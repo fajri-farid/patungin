@@ -12,8 +12,16 @@ import type {
 import type { UserAccount, InviteRecord } from "../access/types";
 import type { AccountAudit, UserMonthSummary } from "../admin/summary";
 import type { OperationalEvent } from "../observability/events";
+import type { ReceiptPhotoRecord } from "@/domain/receipts";
+import type { PaymentProfile } from "@/domain/payment-profile";
 
 export interface DevDatabaseSchema {
+  qrisImages: Record<string, import("@/domain/qris").QrisImageRecord>;
+  qrisUploadQuotas: Record<string, { hour: number; attempts: number }>;
+  paymentProfiles: Record<string, PaymentProfile>;
+  receiptPhotos: Record<string, ReceiptPhotoRecord>;
+  receiptPhotoQuotas: Record<string, import("../receipts/photos").PhotoQuota>;
+  receiptPhotoReads: Record<string, { count: number; deleteAfter: Date }>;
   bills: Record<string, BillDocument>;
   finalizations: Record<string, FinalizationSnapshot>;
   shares: Record<string, ShareRecord>;
@@ -44,6 +52,12 @@ function currentFileSignature() {
 
 function createEmptyDevDatabase(): DevDatabaseSchema {
   return {
+    qrisImages: {},
+    qrisUploadQuotas: {},
+    paymentProfiles: {},
+    receiptPhotos: {},
+    receiptPhotoQuotas: {},
+    receiptPhotoReads: {},
     bills: {},
     finalizations: {},
     shares: {},

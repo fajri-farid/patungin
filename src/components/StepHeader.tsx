@@ -44,7 +44,7 @@ const STEPS = [
     label: "Hasil",
     title: "Cek bagian tiap orang.",
     description:
-      "Tambahkan rekening jika perlu, lalu simpan hasil untuk dibagikan ke teman.",
+      "Tambahkan tujuan pembayaran jika perlu, lalu simpan hasil untuk dibagikan ke teman.",
   },
 ] as const;
 

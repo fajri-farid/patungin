@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Manrope, Source_Sans_3 } from "next/font/google";
-import { Analytics } from "@vercel/analytics/next";
+import { PrivateAnalytics } from "@/components/PrivateAnalytics";
 import "./globals.css";
 
 const manrope = Manrope({
@@ -47,7 +47,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-[#F4F7FC] text-[#17233B]">
         {children}
-        <Analytics />
+        <PrivateAnalytics />
       </body>
     </html>
   );

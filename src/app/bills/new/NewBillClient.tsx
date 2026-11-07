@@ -1,5 +1,8 @@
 "use client";
 
+import { processReceiptImageOnClient } from "@/lib/receipt-image-client";
+import { loadReceiptState, uploadReceiptFile } from "@/lib/receipt-photo-client";
+import { rememberReceiptPreview, forgetReceiptPreview } from "@/lib/local-receipt-preview";
 import React, { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -27,103 +30,19 @@ export interface ScanQuotaStatus {
   bonus: number;
   remaining: number;
 }
-interface NewBillClientProps { embedded?: boolean; quotaStatus: ScanQuotaStatus }
+interface NewBillClientProps { embedded?: boolean; quotaStatus: ScanQuotaStatus; receiptsEnabled?: boolean }
 
-/**
- * Mengoptimasi gambar struk di browser (rotasi, crop vertikal opsional, dan resize <= 2400px)
- * agar angka tetap tajam namun ukuran upload di bawah batas 2 MiB server.
- */
-async function processReceiptImageOnClient(params: {
-  dataUrl: string;
-  rotationDeg: number;
-  cropVerticalMarginPct: number;
-}): Promise<{ blob: Blob; previewDataUrl: string }> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const cropRatio =
-        Math.max(0, Math.min(25, params.cropVerticalMarginPct)) / 100;
-      const srcX = 0;
-      const srcY = Math.round(img.height * cropRatio);
-      const srcW = img.width;
-      const srcH = Math.max(10, Math.round(img.height * (1 - cropRatio * 2)));
-
-      const isRotated90 = params.rotationDeg % 180 !== 0;
-      const rawOutW = isRotated90 ? srcH : srcW;
-      const rawOutH = isRotated90 ? srcW : srcH;
-
-      const maxSide = 2400;
-      const scale =
-        Math.max(rawOutW, rawOutH) > maxSide
-          ? maxSide / Math.max(rawOutW, rawOutH)
-          : 1;
-
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.round(rawOutW * scale));
-      canvas.height = Math.max(1, Math.round(rawOutH * scale));
-
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        reject(
-          new ReceiptInputError(
-            "Foto belum bisa diolah. Coba browser lain atau isi manual.",
-          ),
-        );
-        return;
-      }
-
-      ctx.fillStyle = "#FFFFFF";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      ctx.save();
-      ctx.translate(canvas.width / 2, canvas.height / 2);
-      ctx.rotate((params.rotationDeg * Math.PI) / 180);
-      const drawW = Math.round(srcW * scale);
-      const drawH = Math.round(srcH * scale);
-      ctx.drawImage(
-        img,
-        srcX,
-        srcY,
-        srcW,
-        srcH,
-        -drawW / 2,
-        -drawH / 2,
-        drawW,
-        drawH,
-      );
-      ctx.restore();
-
-      const previewDataUrl = canvas.toDataURL("image/jpeg", 0.86);
-      canvas.toBlob(
-        (blob) => {
-          if (!blob) {
-            reject(new ReceiptInputError("Gagal memproses gambar struk."));
-            return;
-          }
-          resolve({ blob, previewDataUrl });
-        },
-        "image/jpeg",
-        0.86,
-      );
-    };
-    img.onerror = () =>
-      reject(
-        new ReceiptInputError(
-          "Format gambar tidak dapat dibaca browser. Gunakan JPEG, PNG, atau WebP.",
-        ),
-      );
-    img.src = params.dataUrl;
-  });
-}
 
 export function NewBillClient({
   quotaStatus,
   embedded = false,
+  receiptsEnabled = false,
 }: NewBillClientProps) {
   const router = useRouter();
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
   const busyRef = useRef(false);
+  const photoKeyRef = useRef(crypto.randomUUID());
   const [photo, setPhoto] = useState<string | null>(null);
   const [rotation, setRotation] = useState(0);
   const [stage, setStage] = useState<string | null>(null);
@@ -169,6 +88,7 @@ export function NewBillClient({
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") {
+        photoKeyRef.current = crypto.randomUUID();
         setPhoto(reader.result);
         setRotation(0);
       }
@@ -181,6 +101,7 @@ export function NewBillClient({
     if (busyRef.current || (!manual && (!photo || !canScan))) return;
     busyRef.current = true;
     setError(null);
+    let photoNotSaved = false;
     try {
       setStage(manual ? "Menyiapkan tagihan…" : "Menyiapkan foto…");
       const processed =
@@ -206,13 +127,23 @@ export function NewBillClient({
         setCreatedBill(draft);
       }
       if (processed) {
-        try {
-          sessionStorage.setItem(
-            `patungin_receipt_photo_${draft.id}`,
-            processed.previewDataUrl,
-          );
-        } catch {
-          /* Optional reference image. */
+        rememberReceiptPreview(draft.id, processed.previewDataUrl);
+        if (receiptsEnabled) {
+          setStage("Menyimpan foto selama 24 jam…");
+          try {
+            const saved = await uploadReceiptFile(draft, processed.blob, `${photoKeyRef.current}_${rotation}`);
+            draft = { id: saved.bill.id, revision: saved.bill.revision };
+            setCreatedBill(draft);
+            forgetReceiptPreview(draft.id);
+          } catch {
+            photoNotSaved = true;
+            // Do not issue OCR against an uncertain revision after a lost upload response.
+            const state = await loadReceiptState(draft.id);
+            if (state.bill.receiptPhotoUploadId) throw new ReceiptInputError("Foto masih diproses. Tunggu sebentar lalu coba lagi; scan belum dijalankan.");
+            draft = { id: state.bill.id, revision: state.bill.revision };
+            setCreatedBill(draft);
+            photoNotSaved = state.photo.status !== "available";
+          }
         }
         setStage("Membaca pesanan dan harga…");
         const form = new FormData();
@@ -236,7 +167,7 @@ export function NewBillClient({
               "Struk belum terbaca. Coba lagi atau lanjut isi manual.",
           );
       }
-      router.push(`/bills/${draft.id}/review`);
+      router.push(`/bills/${draft.id}/review${photoNotSaved ? "?photo=not-saved" : ""}`);
     } catch (err) {
       setError(
         err instanceof ReceiptInputError
@@ -415,6 +346,7 @@ export function NewBillClient({
         </div>
       )}
 
+      <p className="text-xs text-[#4A5B7C]">{receiptsEnabled ? "Foto disimpan sementara selama 24 jam. Berbagi foto ke teman bisa dipilih nanti." : "Foto dipakai untuk membaca struk. Penyimpanan foto sementara belum tersedia."}</p>
       {photo ? (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -487,8 +419,9 @@ export function NewBillClient({
             </summary>
             <p className="pt-2">
               Foto dikirim ke Google Gemini untuk membaca pesanan dan harga.
-              Foto tidak disimpan di server Patungin. Salinannya tersimpan
-              sementara di browser ini untuk kamu cek.
+              {receiptsEnabled
+                ? " Salinan foto disimpan privat selama masa akses 24 jam, lalu dihapus otomatis. Foto hanya ikut link jika kamu memilih."
+                : " Penyimpanan foto online belum tersedia. Salinan referensi hanya tersedia sementara di tab ini."}
             </p>
           </details>
         </div>

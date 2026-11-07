@@ -25,8 +25,8 @@ export function createFirestoreFake() {
     return {
       path,
       doc: (id: string) => ref(`${path}/${id}`),
-      where: (field: string, _op: string, value: unknown) =>
-        query(path, field, value),
+      where: (field: string, op: string, value: unknown) =>
+        query(path, field, value, Infinity, op),
       get: async () => query(path).get(),
     };
   }
@@ -35,20 +35,28 @@ export function createFirestoreFake() {
     field?: string,
     value?: unknown,
     maximum = Infinity,
+    op = "==",
+    conditions: Array<{ field: string; op: string; value: unknown }> = [],
   ) {
+    const filters = field ? [...conditions, { field, op, value }] : conditions;
     return {
       query: true,
       path,
       field,
       value,
       maximum,
-      limit: (n: number) => query(path, field, value, n),
+      limit: (n: number) => query(path, undefined, undefined, n, "==", filters),
+      orderBy: () => query(path, undefined, undefined, maximum, "==", filters),
+      where: (field: string, op: string, value: unknown) =>
+        query(path, field, value, maximum, op, filters),
       get: async () => {
         const docs = [...documents]
           .filter(
             ([key, data]) =>
               key.slice(0, key.lastIndexOf("/")) === path &&
-              (!field || data[field] === value),
+              filters.every(({ field, op, value }) =>
+                op === "<=" ? String(data[field]) <= String(value) :
+                op === "in" ? (value as unknown[]).includes(data[field]) : data[field] === value),
           )
           .slice(0, maximum)
           .map(([key]) => snapshot(key));

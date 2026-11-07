@@ -30,7 +30,7 @@ const FAQ_LIST = [
   {
     question: "Apa saja yang terlihat saat link dibagikan?",
     answer:
-      "Siapa pun yang punya link bisa melihat nama peserta, pesanan, rincian pembagian, dan info pembayaran yang kamu cantumkan. Foto struk dan email akunmu tidak ikut ditampilkan. Bagikan link hanya ke orang yang perlu melihatnya.",
+      "Siapa pun yang punya link bisa melihat nama peserta, pesanan, rincian pembagian, dan info pembayaran yang kamu cantumkan. Jika fitur foto sementara tersedia, foto hanya ikut saat kamu memilih dan masa aksesnya masih berlaku: 24 jam sejak unggah. Email akun tidak ditampilkan. Bagikan link hanya ke orang yang perlu melihatnya.",
   },
 ];
 
