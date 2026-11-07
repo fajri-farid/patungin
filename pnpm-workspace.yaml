@@ -17,3 +17,6 @@ allowBuilds:
   protobufjs: false
   sharp: false
   unrs-resolver: false
+
+patchedDependencies:
+  jwks-rsa@4.1.0: patches/jwks-rsa@4.1.0.patch

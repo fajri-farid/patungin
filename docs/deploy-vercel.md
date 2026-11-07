@@ -17,7 +17,7 @@ Alurnya: **siapkan repo → hubungkan ke Vercel → dapatkan domain → isi konf
 
 Gemini bisa disiapkan setelah aplikasi berjalan. Untuk percobaan pertama, gunakan input pesanan manual.
 
-Pastikan `package.json`, `pnpm-lock.yaml`, dan `pnpm-workspace.yaml` sudah ada di GitHub. File `.env`, `.env.local`, JSON service account, dan data sandbox tetap disimpan di perangkatmu.
+Pastikan `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, dan folder `patches/` sudah ada di GitHub. File `.env`, `.env.local`, JSON service account, dan data sandbox tetap disimpan di perangkatmu.
 
 ## 2. Import repo ke Vercel
 
@@ -47,7 +47,9 @@ Di bagian **Environment Variables**, tambahkan pengaturan build berikut untuk en
 
 Corepack membuat Vercel memakai versi pnpm pada `packageManager` di `package.json`, yaitu `pnpm@12.10.1`. Biarkan instalasi otomatis agar tidak memakai pnpm bawaan yang berbeda. Pengaturan ini mengikuti [petunjuk Corepack Vercel](https://vercel.com/docs/builds/configure-a-build#corepack).
 
-Gunakan **Node.js 24.x** untuk build dan runtime. Project menetapkan `engines.node` ke `24.x` di `package.json`, yang dapat mengungguli pilihan Node.js di dashboard. Firebase Auth memakai `jwks-rsa` yang memuat ESM `jose` melalui `require()`, sehingga runtime perlu mendukung `require(esm)`. Jangan gunakan `NODE_OPTIONS=--no-experimental-require-module` karena menonaktifkan dukungan tersebut. Setelah mengubah versi Node.js, buat deployment baru; detailnya ada di [pengaturan Node.js Vercel](https://vercel.com/docs/functions/runtimes/node-js/node-js-versions#version-overrides-in-packagejson).
+Gunakan **Node.js 24.x** untuk build dan runtime. Project menetapkan `engines.node` ke `24.x` di `package.json`, yang dapat mengungguli pilihan Node.js di dashboard. Setelah mengubah versi Node.js, buat deployment baru; detailnya ada di [pengaturan Node.js Vercel](https://vercel.com/docs/functions/runtimes/node-js/node-js-versions#version-overrides-in-packagejson).
+
+Firebase Auth memakai `jwks-rsa@4.1.0`, yang secara bawaan memuat ESM `jose` melalui `require()`. Pada runtime yang menonaktifkan `require(esm)`, hal ini menyebabkan `ERR_REQUIRE_ESM` meskipun build berhasil. Patch di `patches/jwks-rsa@4.1.0.patch` mengubah pemuatan tersebut menjadi `await import('jose')`. pnpm menerapkannya otomatis melalui `patchedDependencies` di `pnpm-workspace.yaml`; jangan menghapus patch atau mengganti instalasi dengan npm. Jika deployment masih memakai dependency lama, deploy commit terbaru dengan build cache dinonaktifkan. Tes `tests/firebase-auth-runtime.test.ts` memeriksa pemuatan Firebase Auth dan pengambilan kunci publik dengan `require(esm)` dinonaktifkan, tanpa kredensial atau akses jaringan.
 
 ## 3. Deploy pertama untuk mendapatkan domain
 
