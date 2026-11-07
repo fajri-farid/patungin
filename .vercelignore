@@ -1,0 +1,17 @@
+.git
+node_modules
+.next
+.env*
+.patungin-*
+output
+.playwright-cli
+coverage
+.firebase
+service-account*.json
+*firebase-adminsdk*.json
+*.pem
+*.key
+*.p12
+*.pfx
+*.tsbuildinfo
+*-debug*.log

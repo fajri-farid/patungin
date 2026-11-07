@@ -1,5 +1,7 @@
 # Setup dan konfigurasi
 
+Fitur opsional v1.1.0: [foto struk sementara dan pengaturan pembayaran](receipt-storage.md). Penyimpanan foto perlu bucket privat serta scheduler cleanup terpisah; pengaturan rekening memakai Firestore yang sudah ada.
+
 [Kembali ke README](../README.md) · [Deployment dan operasi](operations.md) · [Deploy ke Vercel](deploy-vercel.md)
 
 Panduan ini menyiapkan login Google, penyimpanan tagihan, pembacaan struk, dan link hasil. Semua perintah dijalankan dari direktori `splitbill-webapp`.

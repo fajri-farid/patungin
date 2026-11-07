@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { ReceiptPhoto } from "@/components/ReceiptPhoto";
 import { CheckCircle2, ReceiptText, User, Users, Wallet } from "lucide-react";
 import { formatRupiah } from "@/domain/billing/money";
 import type { PublicShareProjection } from "@/domain/billing/types";
@@ -13,10 +14,11 @@ import ui from "@/components/product/product.module.css";
 import { formatReceiptDate } from "@/components/product/billing-feedback";
 
 interface PublicShareClientProps {
+  shareToken: string;
   projection: PublicShareProjection;
 }
 
-export function PublicShareClient({ projection }: PublicShareClientProps) {
+export function PublicShareClient({ projection, shareToken }: PublicShareClientProps) {
   const [selectedPersonId, setSelectedPersonId] = useState<
     string | null | undefined
   >(
@@ -96,6 +98,10 @@ export function PublicShareClient({ projection }: PublicShareClientProps) {
         </section>
 
         {/* Filter Cepat Teman & Daftar Bagian (Dibungkus dalam Wrapper Rapi) */}
+        {projection.receiptPhoto && <section className={`${ui.panel} space-y-3`}>
+          <h2 className={ui.sectionTitle}>Foto struk</h2>
+          <ReceiptPhoto info={projection.receiptPhoto} src={`/api/s/${encodeURIComponent(shareToken)}/receipt-photo`} />
+        </section>}
         <section
           aria-label="Rincian bagian per orang"
           className={`${ui.panel} space-y-4`}
@@ -273,6 +279,7 @@ export function PublicShareClient({ projection }: PublicShareClientProps) {
           {payments.length > 0 ? (
             <PaymentMethodsList
               payments={payments}
+              qrisShareToken={shareToken}
               payerName={projection.payerName}
             />
           ) : (

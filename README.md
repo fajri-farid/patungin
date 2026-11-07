@@ -26,7 +26,7 @@ Pembuat tagihan masuk dengan akun Google. Teman yang menerima link bisa langsung
 - **Bagi sesuai pesanan.** Pilih pemilik setiap menu, bagi menu yang dimakan bersama, atau bagi semua pesanan rata.
 - **Pajak dan diskon ikut dihitung.** Jumlah seluruh bagian tetap sesuai total tagihan yang sudah kamu periksa.
 - **Bagikan ke grup.** Salin ringkasan WhatsApp atau kirim link rincian beserta QR. Link berlaku tujuh hari dan bisa dinonaktifkan.
-- **Cantumkan tujuan transfer.** Tambahkan rekening bank, e-wallet, atau petunjuk meminta QRIS melalui chat.
+- **Cantumkan tujuan pembayaran.** Pilih rekening bank, e-wallet, atau gambar QRIS tersimpan; informasi pembayaran ikut ditampilkan pada rincian tagihan.
 - **Lanjutkan nanti.** Simpan tagihan yang belum selesai dan lihat tagihan sebelumnya di halaman riwayat.
 
 Satu tagihan mendukung hingga **30 orang**, **100 baris pesanan**, dan **10 tujuan pembayaran**.
@@ -127,8 +127,11 @@ Folder `tests`, konfigurasi Vitest, dan helper `scripts/check-firestore-indexes.
 
 ## Data dan privasi
 
-- Saat scan digunakan, gambar struk dikirim ke Gemini untuk dibaca. Aplikasi tidak menyimpan foto tersebut di Firestore atau tempat penyimpanan publik.
-- Siapa pun yang memiliki link hasil dapat melihat nama peserta, pesanan, jumlah bayar, dan informasi transfer yang dicantumkan. Foto struk dan email pemilik tidak ditampilkan.
+- Saat scan digunakan, gambar struk dikirim ke Gemini untuk dibaca. Jika penyimpanan foto sementara diaktifkan operator, foto disimpan di bucket privat dengan masa akses 24 jam sejak unggah, lalu dihapus otomatis. Bytes foto tidak disimpan di Firestore.
+- Siapa pun yang memiliki link hasil dapat melihat nama peserta, pesanan, jumlah bayar, dan informasi transfer yang dicantumkan. Foto hanya ikut jika host memilih dan masa aksesnya belum berakhir. Email akun pemilik tidak ditampilkan.
+- Tujuan pembayaran dapat disimpan di Pengaturan untuk dipilih ulang. Hanya rekening yang dipilih pada tagihan yang dibagikan; perubahan profil tidak mengubah tagihan lama.
+
+Setup foto bersifat opsional. Lihat [foto sementara dan profil pembayaran](docs/receipt-storage.md) untuk bucket, biaya, scheduler cleanup, dan retensi.
 - Pemilik bisa mencabut link. Mengedit ulang tagihan juga mencabut link aktif.
 - Admin deployment dapat menutup pembuatan dan pembukaan semua link publik dengan `SHARE_LINKS_ENABLED=false`, lalu restart atau deploy ulang. Link yang belum dicabut atau kedaluwarsa dapat diakses lagi jika fitur diaktifkan kembali dengan secret yang sama.
 - Scan memiliki batas pemakaian per akun. Biaya layanan Firebase, Gemini, dan hosting mengikuti pemakaian deployment masing-masing.
@@ -140,6 +143,8 @@ Folder `tests`, konfigurasi Vitest, dan helper `scripts/check-firestore-indexes.
 - [Deploy ke Vercel untuk pemula](docs/deploy-vercel.md) — dari menghubungkan GitHub sampai aplikasi bisa dibuka dan dipakai.
 - [Deployment dan operasi](docs/operations.md) — menjalankan aplikasi di server, mengelola pengguna, kuota, dan penyimpanan data.
 - [Contoh konfigurasi](.env.example) — daftar pengaturan aplikasi yang perlu diisi.
+- [Keamanan deployment](docs/security-deployment.md) — hasil audit, pengaturan Vercel/Firebase, dan batas verifikasi.
+- [Kebijakan keamanan](SECURITY.md) — pelaporan privat dan pemeriksaan sebelum publikasi.
 
 ## Kontribusi
 

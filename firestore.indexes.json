@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "qrisImages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ownerUid", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "bills",
       "queryScope": "COLLECTION",
       "fields": [
@@ -420,6 +428,34 @@
     {
       "collectionGroup": "operationalEvents",
       "fieldPath": "subjectUid",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "paymentProfiles",
+      "fieldPath": "methods",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "receiptPhotoQuotas",
+      "fieldPath": "assets",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "receiptPhotos",
+      "fieldPath": "deleteAfter",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "receiptPhotoReads",
+      "fieldPath": "deleteAfter",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "qrisImages",
+      "fieldPath": "deleteAfter",
+      "ttl": true,
       "indexes": []
     }
   ]

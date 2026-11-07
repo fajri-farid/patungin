@@ -4,6 +4,8 @@
 
 Panduan ini memakai dashboard Vercel dan repository GitHub untuk menjalankan Patungin secara online.
 
+Sebelum production, ikuti [pemeriksaan keamanan deployment](security-deployment.md), termasuk pemisahan credential Preview/Production, indeks QRIS, firewall, dan scheduler gambar.
+
 **Vercel menjalankan website dan server aplikasi. Firebase menangani login dan penyimpanan data.** Keduanya tetap perlu dikonfigurasi.
 
 Alurnya: **siapkan repo → hubungkan ke Vercel → dapatkan domain → isi konfigurasi → izinkan domain di Firebase → deploy ulang → coba aplikasi**.

@@ -181,6 +181,7 @@ export type BillStatus = "draft" | "finalized";
 export type ReceiptSourceType = "printed_receipt" | "cashier_screen" | "transaction_screenshot" | "other_transaction" | "unsupported";
 
 export interface PaymentMethodNote {
+  qrisImageId?: string;
   method?: "transfer" | "bank" | "ewallet" | "qris";
   bankOrWalletName?: string;
   accountNumber?: string;
@@ -189,6 +190,9 @@ export interface PaymentMethodNote {
 }
 
 export interface BillDocument {
+  receiptPhotoId?: string | null;
+  receiptPhotoUploadId?: string | null;
+  shareReceiptPhoto?: boolean;
   id: string;
   ownerUid: string;
   ownerVerifiedEmail: string;
@@ -220,6 +224,8 @@ export interface BillDocument {
 }
 
 export interface FinalizationSnapshot {
+  receiptPhotoId?: string | null;
+  shareReceiptPhoto?: boolean;
   id: string;
   billId: string;
   ownerUid: string;
@@ -245,6 +251,7 @@ export interface ReceiptDetails {
 }
 
 export interface PublicShareProjection {
+  receiptPhoto?: import("../receipts").ReceiptPhotoInfo;
   shareId: string;
   billId: string;
   finalizationVersion: number;

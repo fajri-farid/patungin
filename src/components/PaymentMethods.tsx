@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { QrisImage } from "./QrisImage";
 import {
   Check,
   Copy,
@@ -29,10 +30,16 @@ export function PaymentMethodsEditor({
   value,
   onChange,
   disabled,
+  allowQris = true,
+  allowAdd = true,
+  renderQris,
 }: {
   value: PaymentMethodNote[];
   onChange: (value: PaymentMethodNote[]) => void;
   disabled?: boolean;
+  allowQris?: boolean;
+  allowAdd?: boolean;
+  renderQris?: (payment: PaymentMethodNote, index: number) => ReactNode;
 }) {
   const update = (index: number, patch: Partial<PaymentMethodNote>) => {
     onChange(
@@ -63,11 +70,11 @@ export function PaymentMethodsEditor({
             </button>
           </div>
           <div
-            className="grid grid-cols-3 gap-1 rounded-xl bg-white border border-[#D8E2F2] p-1"
+            className={`grid ${allowQris ? "grid-cols-3" : "grid-cols-2"} gap-1 rounded-xl bg-white border border-[#D8E2F2] p-1`}
             role="group"
             aria-label={`Jenis pembayaran ${index + 1}`}
           >
-            {methods.map(({ value: method, label, Icon }) => (
+            {methods.filter(method => allowQris || method.value !== "qris").map(({ value: method, label, Icon }) => (
               <button
                 type="button"
                 key={method}
@@ -80,7 +87,7 @@ export function PaymentMethodsEditor({
                   onChange(
                     value.map((current, i) =>
                       i === index
-                        ? { method, note: current.note ?? "" }
+                        ? current.method === method ? current : { method, note: current.note ?? "" }
                         : current,
                     ),
                   )
@@ -98,7 +105,7 @@ export function PaymentMethodsEditor({
               </button>
             ))}
           </div>
-          {payment.method === "qris" ? (
+          {payment.method === "qris" && renderQris ? renderQris(payment, index) : payment.method === "qris" && payment.qrisImageId ? <QrisImage key={payment.qrisImageId} imageId={payment.qrisImageId} /> : payment.method === "qris" ? (
             <p className="text-sm text-[#4A5B7C] leading-relaxed">
               Bagikan kode QRIS lewat chat. Di rincian ini, teman akan diminta
               menghubungimu untuk mendapatkan kodenya.
@@ -175,7 +182,7 @@ export function PaymentMethodsEditor({
           </label>
         </div>
       ))}
-      {value.length < MAX_PAYMENT_METHODS && (
+      {allowAdd && value.length < MAX_PAYMENT_METHODS && (
         <button
           type="button"
           onClick={() => onChange([...value, { method: "bank" }])}
@@ -194,9 +201,11 @@ export function PaymentMethodsEditor({
 export function PaymentMethodsList({
   payments,
   payerName,
+  qrisShareToken,
 }: {
   payments: PaymentMethodNote[];
   payerName: string;
+  qrisShareToken?: string;
 }) {
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [copyError, setCopyError] = useState(false);
@@ -254,7 +263,7 @@ export function PaymentMethodsList({
                 </button>
               )}
             </div>
-            {payment.method === "qris" ? (
+            {payment.method === "qris" && payment.qrisImageId ? <QrisImage key={payment.qrisImageId} imageId={payment.qrisImageId} shareToken={qrisShareToken} /> : payment.method === "qris" ? (
               <p className="text-sm text-[#4A5B7C]">
                 Minta kode QRIS ke {payerName} lewat chat.
               </p>

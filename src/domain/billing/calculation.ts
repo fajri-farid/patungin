@@ -1106,7 +1106,7 @@ export function formatSummaryText(params: {
   for (const payment of payments) {
     lines.push("");
     if (payment.method === "qris") {
-      lines.push("Bayar lewat *QRIS* ya. Kode QR-nya aku kirim di chat.");
+      lines.push(payment.qrisImageId && params.shareUrl ? "Bayar lewat *QRIS* ya. Gambar QRIS tersedia di link rincian di bawah." : "Bayar lewat *QRIS* ya. Kode QR-nya aku kirim di chat.");
     } else {
       const accParts = [
       payment.bankOrWalletName,

@@ -25,6 +25,10 @@ import {
   type EventStage,
 } from "@/server/observability/events";
 import { DIAGNOSTICS } from "@/domain/diagnostics";
+import { limitedFormData, PRIVATE_HEADERS } from "@/server/receipts/http";
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
 
 export async function POST(
   request: Request,
@@ -41,7 +45,7 @@ export async function POST(
   const reply = (data: object, status = 200) =>
     NextResponse.json(
       { ...data, requestId },
-      { status, headers: { "X-Request-Id": requestId } },
+      { status, headers: { ...PRIVATE_HEADERS, "X-Request-Id": requestId } },
     );
   try {
     await verifyRequestOrigin(request);
@@ -54,8 +58,9 @@ export async function POST(
 
     let formData: FormData;
     try {
-      formData = await request.formData();
-    } catch {
+      formData = await limitedFormData(request, MAX_SERVER_IMAGE_BYTES + 64 * 1024);
+    } catch (error) {
+      if (error instanceof AppServiceError) throw error;
       throw new AppServiceError(
         400,
         "INVALID_FORM",

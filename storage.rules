@@ -1,0 +1,10 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // All receipt bytes pass through authenticated Next.js endpoints.
+    // Admin/Google Cloud clients use IAM and bypass these browser rules.
+    match /{object=**} {
+      allow read, write: if false;
+    }
+  }
+}

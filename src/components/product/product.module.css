@@ -668,6 +668,8 @@
     width: calc(100% - 32px);
     min-height: 64px;
     gap: 10px;
+    flex-wrap: wrap;
+    padding-block: 8px;
   }
   .brand {
     font-size: 19px;

@@ -13,6 +13,9 @@
  */
 
 import crypto from "node:crypto";
+import { productTransaction, firestoreProductTransaction } from "./transaction";
+import { billQrisIds, syncQrisReferences } from "../payments/qris-references";
+import { addPublicPhotoInfo } from "../receipts/photos";
 import type { ApplicationOutcome } from "@/domain/diagnostics";
 import { readDevDb, writeDevDb } from "./dev-database";
 import { makeSummary, summaryId, type UserMonthSummary } from "../admin/summary";
@@ -324,6 +327,7 @@ export async function createDraftBill(params: {
 }
 
 export interface SaveBillDraftPatch {
+  shareReceiptPhoto?: boolean;
   expectedRevision: number;
   title?: string;
   merchant?: string;
@@ -358,6 +362,9 @@ export async function saveBillDraft(
   }
 
   const applyPatchToBill = (current: BillDocument): BillDocument => {
+    if (patch.shareReceiptPhoto !== undefined && typeof patch.shareReceiptPhoto !== "boolean") {
+      throw new AppServiceError(422, "INVALID_PHOTO_SHARING", "Pilihan berbagi foto tidak valid.");
+    }
     if (current.ownerUid !== ownerUid) {
       throw new AppServiceError(
         403,
@@ -444,34 +451,17 @@ export async function saveBillDraft(
       confirmedGrandTotal: updatedGrandTotal,
       confirmedInputHash: nextConfirmedHash,
       paymentMethods,
+      shareReceiptPhoto: patch.shareReceiptPhoto ?? current.shareReceiptPhoto ?? false,
       updatedAt: new Date().toISOString(),
     };
   };
 
-  const config = getServerConfig();
-  if (config.isDevSandbox) {
-    const db = readDevDb();
-    const current = db.bills[billId];
-    if (!current) {
-      throw new AppServiceError(404, "BILL_NOT_FOUND", "Tagihan tidak ditemukan.");
-    }
+  return productTransaction(async tx => {
+    const current = await tx.get<BillDocument>("bills", billId);
+    if (!current) throw new AppServiceError(404, "BILL_NOT_FOUND", "Tagihan tidak ditemukan.");
     const next = applyPatchToBill(current);
-    db.bills[billId] = next;
-    writeDevDb(db);
-    return structuredClone(next);
-  }
-
-  const firestore = getAdminFirestore();
-  const billRef = firestore.collection("bills").doc(billId);
-
-  return firestore.runTransaction(async (tx) => {
-    const snap = await tx.get(billRef);
-    if (!snap.exists) {
-      throw new AppServiceError(404, "BILL_NOT_FOUND", "Tagihan tidak ditemukan.");
-    }
-    const current = snap.data() as BillDocument;
-    const next = applyPatchToBill(current);
-    tx.set(billRef, next);
+    await syncQrisReferences(tx, ownerUid, billQrisIds(current), billQrisIds(next));
+    tx.set("bills", billId, next);
     return next;
   });
 }
@@ -501,6 +491,7 @@ export async function finalizeBillOnServer(params: {
     }
 
     // Idempotent jika sudah finalized pada revision yang sama
+    if (current.receiptPhotoUploadId) throw new AppServiceError(409, "PHOTO_UPLOAD_IN_PROGRESS", "Foto masih disimpan. Tunggu sebelum menyelesaikan tagihan.");
     if (
       current.status === "finalized" &&
       current.revision === params.expectedRevision &&
@@ -555,6 +546,8 @@ export async function finalizeBillOnServer(params: {
       inputSnapshot,
       calculationResult: calcResult,
       paymentMethods: normalizePaymentMethods(current.paymentMethods, current.paymentNote),
+      receiptPhotoId: current.receiptPhotoId ?? null,
+      shareReceiptPhoto: current.shareReceiptPhoto === true,
       finalizedAt: now,
     };
 
@@ -572,26 +565,28 @@ export async function finalizeBillOnServer(params: {
 
   if (config.isDevSandbox) {
     const db = readDevDb();
-    const current = db.bills[params.billId];
-    if (!current) {
-      throw new AppServiceError(404, "BILL_NOT_FOUND", "Tagihan tidak ditemukan.");
-    }
-    const existingList = Object.values(db.finalizations).filter(
-      (f) => f.billId === params.billId
-    );
-    const activeSnap = current.currentFinalizationId
-      ? current.finalResult ?? db.finalizations[current.currentFinalizationId]
-      : undefined;
+    return productTransaction(async tx => {
+      const current = await tx.get<BillDocument>("bills", params.billId);
+      if (!current) {
+        throw new AppServiceError(404, "BILL_NOT_FOUND", "Tagihan tidak ditemukan.");
+      }
+      const existingList = Object.values(db.finalizations).filter(
+        (f) => f.billId === params.billId
+      );
+      const activeSnap = current.currentFinalizationId
+        ? current.finalResult ?? db.finalizations[current.currentFinalizationId]
+        : undefined;
 
-    const res = executeFinalization(current, current.finalResult?.versionNumber ?? existingList.length, activeSnap);
-    if (res.isNew) {
-      db.bills[params.billId] = res.bill;
-      writeDevDb(db);
-    }
-    return {
-      bill: structuredClone(res.bill),
-      snapshot: structuredClone(res.snapshot),
-    };
+      const res = executeFinalization(current, current.finalResult?.versionNumber ?? existingList.length, activeSnap);
+      if (res.isNew) {
+        await syncQrisReferences(tx, params.ownerUid, billQrisIds(current), billQrisIds(res.bill));
+        tx.set("bills", params.billId, res.bill);
+      }
+      return {
+        bill: structuredClone(res.bill),
+        snapshot: structuredClone(res.snapshot),
+      };
+    });
   }
 
   const firestore = getAdminFirestore();
@@ -606,7 +601,10 @@ export async function finalizeBillOnServer(params: {
       if (legacy.exists) active = legacy.data() as FinalizationSnapshot;
     }
     const res = executeFinalization(current, active?.versionNumber ?? 0, active);
-    if (res.isNew) tx.set(billRef, res.bill);
+    if (res.isNew) {
+      await syncQrisReferences(firestoreProductTransaction(tx), params.ownerUid, billQrisIds(current), billQrisIds(res.bill));
+      tx.set(billRef, res.bill);
+    }
     return { bill: res.bill, snapshot: res.snapshot };
   });
 }
@@ -972,28 +970,19 @@ export async function deleteBillForOwner(params: {
   const nowIso = new Date().toISOString();
 
   if (config.isDevSandbox) {
-    const db = readDevDb();
-    const bill = db.bills[params.billId];
-    if (!bill) return; // Idempotent
-    if (bill.ownerUid !== params.ownerUid) {
-      throw new AppServiceError(403, "FORBIDDEN", "Akses ditolak.");
-    }
-    for (const share of Object.values(db.shares)) {
-      if (share.billId === params.billId) {
-        share.revokedAt = nowIso;
-        delete db.shares[share.shareId];
-      }
-    }
-    for (const fin of Object.values(db.finalizations)) {
-      if (fin.billId === params.billId) {
-        delete db.finalizations[fin.id];
-      }
-    }
-    for (const attempt of Object.values(db.scanAttempts)) {
-      if (attempt.billId === params.billId && !isScanStillRunning(attempt)) delete db.scanAttempts[attempt.id];
-    }
-    delete db.bills[params.billId];
-    writeDevDb(db);
+    await productTransaction(async tx => {
+      const bill = await tx.get<BillDocument>("bills", params.billId);
+      if (!bill) return;
+      if (bill.ownerUid !== params.ownerUid) throw new AppServiceError(403, "FORBIDDEN", "Akses ditolak.");
+      const photo = bill.receiptPhotoId ? await tx.get<import("@/domain/receipts").ReceiptPhotoRecord>("receiptPhotos", bill.receiptPhotoId) : null;
+      await syncQrisReferences(tx, params.ownerUid, billQrisIds(bill), []);
+      const db = readDevDb();
+      for (const share of Object.values(db.shares)) if (share.billId === bill.id) tx.delete("shares", share.shareId);
+      for (const fin of Object.values(db.finalizations)) if (fin.billId === bill.id) tx.delete("finalizations", fin.id);
+      for (const attempt of Object.values(db.scanAttempts)) if (attempt.billId === bill.id && !isScanStillRunning(attempt)) tx.delete("scanAttempts", attempt.id);
+      if (photo) tx.set("receiptPhotos", photo.id, { ...photo, status: "cleanup_pending", nextCleanupAt: nowIso });
+      tx.delete("bills", bill.id);
+    });
     return;
   }
 
@@ -1012,6 +1001,11 @@ export async function deleteBillForOwner(params: {
     const current = await tx.get(billRef);
     if (!current.exists) return;
     if ((current.data() as BillDocument).ownerUid !== params.ownerUid) throw new AppServiceError(403, "FORBIDDEN", "Akses ditolak.");
+    const photoId = (current.data() as BillDocument).receiptPhotoId;
+    const photoRef = photoId ? firestore.collection("receiptPhotos").doc(photoId) : null;
+    const photo = photoRef ? await tx.get(photoRef) : null;
+    await syncQrisReferences(firestoreProductTransaction(tx), params.ownerUid, billQrisIds(current.data() as BillDocument), []);
+    if (photo?.exists && photoRef) tx.update(photoRef, { status: "cleanup_pending", nextCleanupAt: nowIso });
     tx.delete(billRef);
   });
   const shares = await firestore.collection("shares").where("billId", "==", params.billId).get();
@@ -1096,10 +1090,12 @@ export async function resolvePublicShareToken(
     paymentMethods: normalizePaymentMethods(snapshot.paymentMethods, snapshot.paymentNote),
     finalizedAt: snapshot.finalizedAt, expiresAt: new Date(effectiveExpiry).toISOString(),
   } : { ...structuredClone(share.publicProjection!), expiresAt: new Date(effectiveExpiry).toISOString() };
+  if (snapshot?.shareReceiptPhoto) await addPublicPhotoInfo(projection, bill, snapshot.receiptPhotoId);
   return projection;
 }
 
 function assertScannableBill(bill: BillDocument, expectedRevision: number): void {
+  if (bill.receiptPhotoUploadId) throw new AppServiceError(409, "PHOTO_UPLOAD_IN_PROGRESS", "Foto masih disimpan. Tunggu sebelum membaca struk.");
   if (bill.status !== "draft") {
     throw new AppServiceError(409, "BILL_FINALIZED", "Buka kembali tagihan sebagai draft sebelum membaca struk baru.");
   }

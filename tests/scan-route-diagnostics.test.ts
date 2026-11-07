@@ -23,6 +23,23 @@ beforeEach(()=>{
 });
 afterEach(()=>{vi.unstubAllEnvs();});
 describe("scan route diagnostics",()=>{
+ it("rejects oversized chunked multipart bodies before parsing or reserving AI quota",async()=>{
+  let cancelled=false;
+  const stream=new ReadableStream({
+   pull(controller){controller.enqueue(new Uint8Array(256*1024));},
+   cancel(){cancelled=true;},
+  });
+  const oversized=new Request("http://localhost:3000/api/bills/bill/scan",{
+   method:"POST",headers:{origin:"http://localhost:3000","content-type":"multipart/form-data; boundary=oversized"},
+   body:stream,duplex:"half",
+  } as RequestInit);
+  const response=await POST(oversized,context);
+  expect(response.status).toBe(413);
+  expect(cancelled).toBe(true);
+  expect(mocks.reserve).not.toHaveBeenCalled();
+  expect(mocks.extract).not.toHaveBeenCalled();
+  expect(response.headers.get("cache-control")).toContain("no-store");
+ });
  it("records quota rejection without calling Gemini or charging another attempt",async()=>{
   mocks.reserve.mockRejectedValue(new AppServiceError(429,"MONTHLY_QUOTA_REACHED","Kuota habis"));
   const response=await POST(request(),context);

@@ -1,4 +1,6 @@
 overrides:
+  # Scoped tooling fix for GHSA-g3hv-75wg-m249. Node 24 supports minimatch 11.
+  "@typescript-eslint/typescript-estree>minimatch": "11.0.5"
   # Firebase's Node Firestore adapter pins a gRPC version affected by
   # GHSA-m9gg-hp2v-232j and GHSA-f596-whhp-79r4. Keep the override scoped.
   "@firebase/firestore@4.19.0>@grpc/grpc-js": "1.14.7"

@@ -43,6 +43,8 @@ ui-debug*.log
 
 # local dev sandbox data & service account keys
 .patungin-dev-data.json
+.patungin-receipts/
+.patungin-qris/
 *firebase-adminsdk*.json
 service-account*.json
 /.firebase/
@@ -57,6 +59,7 @@ next-env.d.ts
 # Keep the shared index checker required by the test suite; other local CLIs stay private.
 /scripts/*
 !/scripts/check-firestore-indexes.mjs
+!/scripts/check-publication.mjs
 
 # Generated output is intentionally not published.
 /output/

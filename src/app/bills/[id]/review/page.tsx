@@ -3,14 +3,17 @@ import { notFound, redirect } from "next/navigation";
 import { getAuthenticatedHost } from "@/server/auth/session";
 import { AppServiceError, getBillForOwner } from "@/server/store/repository";
 import { ReviewClient } from "./ReviewClient";
+import { getOwnerPhotoInfo } from "@/server/receipts/photos";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Cek struk" };
 
 export default async function BillReviewPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ photo?: string }>;
 }) {
   let host = null;
   try {
@@ -34,5 +37,5 @@ export default async function BillReviewPage({
     redirect("/app");
   }
 
-  return <ReviewClient initialBill={bill} />;
+  return <ReviewClient initialBill={bill} initialPhoto={await getOwnerPhotoInfo(bill)} photoNotSaved={(await searchParams).photo === "not-saved"} />;
 }

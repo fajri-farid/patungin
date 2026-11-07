@@ -1,7 +1,10 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterAll } from "vitest";
+import { afterAll, vi } from "vitest";
+
+// Next enforces this build-time boundary; Node unit tests run server modules directly.
+vi.mock("server-only", () => ({}));
 
 // Tests must never use a developer's live Firebase/Gemini credentials or local
 // sandbox database. Each test worker gets one disposable database file.
