@@ -9,9 +9,12 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Image as ImageIcon,
+  Percent,
   Plus,
   ReceiptText,
   Sparkles,
+  Store,
   Trash2,
 } from "lucide-react";
 import { reopenBillAction } from "@/app/actions/bills";
@@ -315,11 +318,33 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
       <main id="bill-content" tabIndex={-1} className={ui.main}>
         <StepIntro activeStep="review" />
         <section className={`${ui.panel} space-y-3`}>
-          <h2 className={ui.sectionTitle}>Foto struk</h2>
-          {photoNotSaved && !bill.receiptPhotoId && <p role="alert" className="text-xs text-[#9A4A12]">Foto belum tersimpan untuk perangkat lain. Pilih ulang foto di sini tanpa scan ulang.</p>}
-          <OwnerReceiptPhoto bill={bill} initialPhoto={initialPhoto} prepareBill={() => saveNow()} onChange={replaceBill} onBusy={setPhotoBusy} />
+          <div className="flex items-center gap-2 pb-2.5 border-b border-[#D8E2F2]">
+            <span className="w-7 h-7 rounded-lg bg-[#E6EDFF] text-[#2855D9] flex items-center justify-center shrink-0">
+              <ImageIcon className="w-4 h-4" aria-hidden="true" />
+            </span>
+            <h2 className={ui.sectionTitle}>Foto struk</h2>
+          </div>
+          {photoNotSaved && !bill.receiptPhotoId && (
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-xl border border-[#F5CA86] bg-[#FFF8F0] p-3 text-xs font-semibold text-[#9A4A12]"
+            >
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
+              <span>
+                Foto belum tersimpan untuk perangkat lain. Pilih ulang foto di
+                sini tanpa perlu scan ulang.
+              </span>
+            </div>
+          )}
+          <OwnerReceiptPhoto
+            bill={bill}
+            initialPhoto={initialPhoto}
+            prepareBill={() => saveNow()}
+            onChange={replaceBill}
+            onBusy={setPhotoBusy}
+          />
         </section>
-        <fieldset disabled={photoBusy} className="contents">
+        <fieldset disabled={photoBusy || proceedPending} className="contents">
         {actionError && (
           <p className={ui.error} role="alert">
             {actionError}
@@ -432,6 +457,9 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
         <section className={`${ui.panel} space-y-4`}>
           <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-[#D8E2F2]">
             <div className="flex items-center gap-2">
+              <span className="w-7 h-7 rounded-lg bg-[#E6EDFF] text-[#2855D9] flex items-center justify-center shrink-0">
+                <Store className="w-4 h-4" aria-hidden="true" />
+              </span>
               <h2 className={ui.sectionTitle}>Info tagihan</h2>
             </div>
           </div>
@@ -496,7 +524,10 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
           className={`${ui.panel} space-y-4`}
         >
           <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-[#D8E2F2]">
-            <div className="flex items-start gap-2">
+            <div className="flex items-start gap-2.5">
+              <span className="w-7 h-7 rounded-lg bg-[#E6EDFF] text-[#2855D9] flex items-center justify-center shrink-0 mt-0.5">
+                <ReceiptText className="w-4 h-4" aria-hidden="true" />
+              </span>
               <div>
                 <h2 id="heading-daftar-item" className={ui.sectionTitle}>
                   Pesanan ({bill.items.length})
@@ -521,7 +552,7 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
               return (
                 <div
                   key={item.id}
-                  className={`rounded-2xl border p-3.5 space-y-3 transition-colors ${
+                  className={`rounded-2xl border p-3.5 space-y-3 transition-colors focus-within:border-[#9DC0FB] focus-within:bg-white ${
                     item.ambiguityReason
                       ? "bg-[#FFF3E6]/60 border-[#F5CA86]"
                       : "bg-[#F4F7FC] border-[#D8E2F2]"
@@ -790,7 +821,10 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
           aria-labelledby="heading-komponen-biaya"
           className={`${ui.panel} space-y-4`}
         >
-          <div className="flex items-start gap-2 pb-2.5 border-b border-[#D8E2F2]">
+          <div className="flex items-start gap-2.5 pb-2.5 border-b border-[#D8E2F2]">
+            <span className="w-7 h-7 rounded-lg bg-[#E6EDFF] text-[#2855D9] flex items-center justify-center shrink-0 mt-0.5">
+              <Percent className="w-4 h-4" aria-hidden="true" />
+            </span>
             <div>
               <h2 id="heading-komponen-biaya" className={ui.sectionTitle}>
                 Pajak, biaya, dan diskon
@@ -1217,7 +1251,10 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
           aria-labelledby="heading-rekonsiliasi"
           className={`${ui.panel} space-y-4`}
         >
-          <div className="flex items-center gap-2 pb-2.5 border-b border-[#D8E2F2]">
+          <div className="flex items-start gap-2.5 pb-2.5 border-b border-[#D8E2F2]">
+            <span className="w-7 h-7 rounded-lg bg-[#E6EDFF] text-[#2855D9] flex items-center justify-center shrink-0 mt-0.5">
+              <Calculator className="w-4 h-4" aria-hidden="true" />
+            </span>
             <div>
               <h2 id="heading-rekonsiliasi" className={ui.sectionTitle}>
                 Cek total tagihan
@@ -1262,7 +1299,7 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
                 </span>
               </div>
             )}
-            <div className="pt-2 border-t border-[#D8E2F2] flex justify-between text-sm font-extrabold text-[#17233B]">
+            <div className="pt-2.5 border-t border-dashed border-[#CBD8EE] flex justify-between text-sm font-extrabold text-[#17233B]">
               <span>Total pesanan dan biaya</span>
               <span className="tabular-money">
                 {hasMissingAmounts
@@ -1388,6 +1425,7 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
             : formatRupiah(calc.computedGrandTotal)
         }
         label="Lanjut bagi pesanan"
+        pendingLabel={photoBusy ? "Menunggu foto…" : "Menyimpan…"}
         pending={proceedPending || photoBusy}
         disabled={
           photoBusy || hasMissingAmounts ||

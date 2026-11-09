@@ -1,5 +1,12 @@
-import Link from "next/link";
-import { History, LogOut, ReceiptText } from "lucide-react";
+import { GuardedLink as Link } from "../NavigationGuard";
+import {
+  History,
+  Home,
+  Landmark,
+  LogOut,
+  ReceiptText,
+  Shield,
+} from "lucide-react";
 import ui from "./product.module.css";
 
 export function AppHeader({
@@ -9,6 +16,7 @@ export function AppHeader({
   history = false,
   admin = false,
   hideNavigation = false,
+  activePage,
 }: {
   email?: string;
   onLogout?: () => void;
@@ -16,7 +24,10 @@ export function AppHeader({
   history?: boolean;
   admin?: boolean;
   hideNavigation?: boolean;
+  activePage?: "app" | "history" | "settings";
 }) {
+  const current = activePage ?? (history ? "history" : undefined);
+
   return (
     <header className={ui.header}>
       <div className={ui.headerInner}>
@@ -26,7 +37,7 @@ export function AppHeader({
           aria-label="Patungin, tagihan saya"
         >
           <span className={ui.brandIcon}>
-            <ReceiptText size={19} aria-hidden="true" />
+            <ReceiptText size={18} aria-hidden="true" />
           </span>
           <span className={ui.brandText}>
             <strong translate="no">Patungin</strong>
@@ -38,18 +49,45 @@ export function AppHeader({
           </span>
         </Link>
         <div className={ui.account}>
-          {!hideNavigation && <nav className={ui.navigation} aria-label="Navigasi aplikasi">
-            {admin && <Link href="/admin">Kelola</Link>}
-            <Link href="/settings/payments">Pengaturan</Link>
-            {history ? (
-              <Link href="/app">Tagihan saya</Link>
-            ) : (
-              <Link href="/history">
-                <History size={16} aria-hidden="true" />
-                Riwayat
+          {!hideNavigation && (
+            <nav className={ui.navigation} aria-label="Navigasi aplikasi">
+              {admin && (
+                <Link href="/admin" aria-label="Kelola aplikasi" title="Kelola">
+                  <Shield size={16} aria-hidden="true" />
+                  <span className={ui.navLabelHideTiny}>Kelola</span>
+                </Link>
+              )}
+              <Link
+                href="/settings/payments"
+                aria-current={current === "settings" ? "page" : undefined}
+                aria-label="Pengaturan pembayaran"
+                title="Pengaturan pembayaran"
+              >
+                <Landmark size={16} aria-hidden="true" />
+                <span className={ui.navLabelHideTiny}>Pengaturan</span>
               </Link>
-            )}
-          </nav>}
+              {history || current === "history" || current === "settings" ? (
+                <Link
+                  href="/app"
+                  aria-current={current === "app" ? "page" : undefined}
+                  aria-label="Tagihan saya"
+                  title="Tagihan saya"
+                >
+                  <Home size={16} aria-hidden="true" />
+                  <span className={ui.navLabelHideTiny}>Tagihan</span>
+                </Link>
+              ) : (
+                <Link
+                  href="/history"
+                  aria-label="Riwayat tagihan"
+                  title="Riwayat tagihan"
+                >
+                  <History size={16} aria-hidden="true" />
+                  <span className={ui.navLabelHideTiny}>Riwayat</span>
+                </Link>
+              )}
+            </nav>
+          )}
           {onLogout && (
             <button
               type="button"
@@ -57,6 +95,7 @@ export function AppHeader({
               onClick={onLogout}
               disabled={pending}
               aria-label="Keluar dari akun"
+              title="Keluar dari akun"
             >
               <LogOut size={16} aria-hidden="true" />
               <span>Keluar</span>

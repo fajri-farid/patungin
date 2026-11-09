@@ -22,9 +22,11 @@ import {
   Copy,
   Edit3,
   ExternalLink,
+  Image as ImageIcon,
   Link2,
   Link2Off,
   QrCode,
+  Share2,
   Users,
   Wallet,
 } from "lucide-react";
@@ -42,7 +44,7 @@ import {
   formatSummaryText,
 } from "@/domain/billing/calculation";
 import { ActionBar } from "@/components/product/ActionBar";
-import { ShareQrCode } from "@/components/product/ShareQrCode";
+import dynamic from "next/dynamic";
 import ui from "@/components/product/product.module.css";
 import {
   billingIssueMessage,
@@ -70,6 +72,11 @@ import {
   editablePaymentMethod,
   normalizePaymentMethods,
 } from "@/domain/billing/payment";
+
+const ShareQrCode = dynamic(
+  () => import("@/components/product/ShareQrCode").then((module) => module.ShareQrCode),
+  { loading: () => <p role="status">Menyiapkan QR rincian…</p> },
+);
 
 interface ResultClientProps {
   initialPhoto: ReceiptPhotoInfo;
@@ -455,12 +462,29 @@ export function ResultClient({
           activeStep="result"
           completed={bill.status === "finalized"}
         />
-        <fieldset disabled={isPending || pickerBusy} className={`${ui.panel} space-y-3`}>
-          <h2 className={ui.sectionTitle}>Foto struk</h2>
-          <OwnerReceiptPhoto bill={bill} initialPhoto={initialPhoto} prepareBill={async () => {
-            if (!(await savePaymentBeforeNavigation())) return null;
-            return (await loadReceiptState(bill.id)).bill;
-          }} onChange={(next, photo) => { setBill(next); setPhotoInfo(photo); }} onBusy={setPhotoBusy} />
+        <fieldset
+          disabled={isPending || pickerBusy}
+          className={`${ui.panel} space-y-3`}
+        >
+          <div className="flex items-center gap-2 pb-2.5 border-b border-[#D8E2F2]">
+            <span className="w-7 h-7 rounded-lg bg-[#E6EDFF] text-[#2855D9] flex items-center justify-center shrink-0">
+              <ImageIcon className="w-4 h-4" aria-hidden="true" />
+            </span>
+            <h2 className={ui.sectionTitle}>Foto struk</h2>
+          </div>
+          <OwnerReceiptPhoto
+            bill={bill}
+            initialPhoto={initialPhoto}
+            prepareBill={async () => {
+              if (!(await savePaymentBeforeNavigation())) return null;
+              return (await loadReceiptState(bill.id)).bill;
+            }}
+            onChange={(next, photo) => {
+              setBill(next);
+              setPhotoInfo(photo);
+            }}
+            onBusy={setPhotoBusy}
+          />
         </fieldset>
         <fieldset disabled={photoBusy} className="contents">
         {actionError && (
@@ -600,14 +624,19 @@ export function ResultClient({
             aria-labelledby="heading-salin-pesan"
             className={`${ui.panel} space-y-4`}
           >
-            <div className="space-y-1">
-              <h2 id="heading-salin-pesan" className={ui.sectionTitle}>
-                Bagikan ke teman
-              </h2>
-              <p className="text-xs text-[#4A5B7C]">
-                Kirim ringkasan ke grup atau salin pesannya. Teman bisa cek
-                jumlah yang perlu dibayar.
-              </p>
+            <div className="flex items-start gap-2.5 pb-2.5 border-b border-[#D8E2F2]">
+              <span className="w-7 h-7 rounded-lg bg-[#E6EDFF] text-[#2855D9] flex items-center justify-center shrink-0 mt-0.5">
+                <Share2 className="w-4 h-4" aria-hidden="true" />
+              </span>
+              <div className="space-y-0.5">
+                <h2 id="heading-salin-pesan" className={ui.sectionTitle}>
+                  Bagikan ke teman
+                </h2>
+                <p className="text-xs text-[#4A5B7C]">
+                  Kirim ringkasan ke grup atau salin pesannya. Teman bisa cek
+                  jumlah yang perlu dibayar.
+                </p>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-2.5">
@@ -812,14 +841,14 @@ export function ResultClient({
         {/* Pengaturan / Daftar Tujuan Pembayaran */}
         <section
           id="payment-settings"
-          className="bg-white border border-[#D8E2F2] rounded-3xl p-4 sm:p-5 space-y-3.5 shadow-xs scroll-mt-36"
+          className={`${ui.panel} space-y-3.5 scroll-mt-36`}
         >
-          <div className="flex items-start gap-2 pb-2.5 border-b border-[#D8E2F2]">
+          <div className="flex items-start gap-2.5 pb-2.5 border-b border-[#D8E2F2]">
             <span className="w-7 h-7 rounded-lg bg-[#E6EDFF] text-[#2855D9] flex items-center justify-center shrink-0 mt-0.5">
               <Wallet className="w-4 h-4" aria-hidden="true" />
             </span>
             <div>
-              <h2 className="text-sm font-extrabold font-display text-[#17233B]">
+              <h2 className={ui.sectionTitle}>
                 {bill.status === "draft"
                   ? "Tujuan pembayaran (opsional)"
                   : "Cara bayar"}
@@ -872,13 +901,42 @@ export function ResultClient({
           )}
         </section>
 
-        {bill.status === "draft" && photoSharingEnabled && <section className={`${ui.panel} space-y-2`}>
-          <label className="flex items-start gap-3 text-sm font-bold">
-            <input type="checkbox" checked={shareReceiptPhoto && photoAvailable} disabled={isPending || !photoAvailable} onChange={event => { setShareReceiptPhoto(event.target.checked); setSaveStatus("idle"); }} />
-            <span>Sertakan foto struk di link berbagi</span>
-          </label>
-          <p className="text-xs text-[#4A5B7C]">{photoAvailable ? "Siapa pun yang memiliki link bisa melihat fotonya sampai masa 24 jam sejak unggah berakhir." : "Simpan foto yang masih berlaku untuk menyertakannya di link."}</p>
-        </section>}
+        {bill.status === "draft" && photoSharingEnabled && (
+          <section
+            className={`${ui.panel} space-y-2.5 transition-colors ${
+              shareReceiptPhoto && photoAvailable
+                ? "border-[#9DC0FB] bg-[#F8FAFF]"
+                : ""
+            }`}
+          >
+            <label
+              className={`flex items-start gap-3 text-sm font-bold ${
+                photoAvailable ? "cursor-pointer" : "opacity-65"
+              }`}
+            >
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={shareReceiptPhoto && photoAvailable}
+                disabled={isPending || !photoAvailable}
+                onChange={(event) => {
+                  setShareReceiptPhoto(event.target.checked);
+                  setSaveStatus("idle");
+                }}
+              />
+              <span className="min-w-0 flex-1 space-y-1">
+                <span className="block text-[#17233B]">
+                  Sertakan foto struk di link berbagi
+                </span>
+                <span className="block text-xs font-normal text-[#4A5B7C]">
+                  {photoAvailable
+                    ? "Siapa pun yang memiliki link bisa melihat fotonya sampai masa akses 24 jam sejak unggah berakhir."
+                    : "Simpan foto struk yang masih berlaku di atas jika ingin menyertakannya pada link berbagi."}
+                </span>
+              </span>
+            </label>
+          </section>
+        )}
         {bill.status === "draft" && (
           <section className={ui.notice}>
             <p className="text-xs sm:text-sm text-[#4A5B7C]">
@@ -894,14 +952,19 @@ export function ResultClient({
             aria-labelledby="heading-share-link"
             className={`${ui.panel} space-y-4`}
           >
-            <div className="flex items-start justify-between gap-2">
+            <div className="flex items-start gap-2.5 pb-2.5 border-b border-[#D8E2F2]">
+              <span className="w-7 h-7 rounded-lg bg-[#E6EDFF] text-[#2855D9] flex items-center justify-center shrink-0 mt-0.5">
+                <Link2 className="w-4 h-4" aria-hidden="true" />
+              </span>
               <div>
                 <h2 id="heading-share-link" className={ui.sectionTitle}>
                   Link rincian tagihan
                 </h2>
                 <p className="text-xs text-[#4A5B7C] mt-0.5">
                   Siapa pun yang punya link bisa melihat rincian pesanan dan
-                  info pembayaran. Link berlaku 7 hari sejak dibuat. Foto hanya ikut jika kamu memilih, sampai masa akses fotonya berakhir. Email akun tidak ditampilkan.
+                  info pembayaran. Link berlaku 7 hari sejak dibuat. Foto hanya
+                  ikut jika kamu memilih, sampai masa akses fotonya berakhir.
+                  Email akun tidak ditampilkan.
                 </p>
               </div>
             </div>
@@ -1021,6 +1084,13 @@ export function ResultClient({
           title={hasBlockingIssues ? "Periksa rincian dulu" : "Siap disimpan"}
           detail={formatRupiah(calc.computedGrandTotal)}
           label={shareLinksEnabled ? "Simpan & buat link" : "Simpan hasil"}
+          pendingLabel={
+            photoBusy
+              ? "Menunggu foto…"
+              : pickerBusy
+                ? "Memuat rekening…"
+                : "Menyimpan…"
+          }
           pending={isPending || photoBusy || pickerBusy}
           disabled={hasBlockingIssues || photoBusy || pickerBusy}
           onClick={handleConfirmReviewAndFinalize}

@@ -5,6 +5,7 @@ export function ActionBar({
   title,
   detail,
   label,
+  pendingLabel = "Menyimpan…",
   pending = false,
   disabled = false,
   onClick,
@@ -12,6 +13,7 @@ export function ActionBar({
   title: string;
   detail: string;
   label: string;
+  pendingLabel?: string;
   pending?: boolean;
   disabled?: boolean;
   onClick: () => void;
@@ -21,7 +23,7 @@ export function ActionBar({
       <div className={ui.actionBarInner}>
         <div className={ui.actionBarText} role="status">
           <strong>{title}</strong>
-          <span>{detail}</span>
+          <span className="tabular-money">{detail}</span>
         </div>
         <button
           type="button"
@@ -33,7 +35,7 @@ export function ActionBar({
           {pending && (
             <Loader2 size={17} className={ui.spinner} aria-hidden="true" />
           )}
-          {pending ? "Menyimpan…" : label}
+          {pending ? pendingLabel : label}
           {!pending && <ArrowRight size={17} aria-hidden="true" />}
         </button>
       </div>

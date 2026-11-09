@@ -7,6 +7,7 @@ import {
   listBillsByOwner,
 } from "@/server/store/repository";
 import { DashboardClient } from "./DashboardClient";
+import { summarizeBill } from "@/domain/billing/summary";
 import { getServerConfig } from "@/server/config/env";
 
 export const dynamic = "force-dynamic";
@@ -33,9 +34,9 @@ export default async function AppHomePage() {
   return (
     <DashboardClient
       host={host}
-      initialBills={billPage.bills}
+      initialBills={billPage.bills.map(summarizeBill)}
       hasMoreBills={!!billPage.nextCursor}
-      latestDraft={latestDraft}
+      latestDraft={latestDraft ? summarizeBill(latestDraft) : null}
       quotaStatus={quotaStatus}
       receiptsEnabled={getServerConfig().receipts.enabled}
     />

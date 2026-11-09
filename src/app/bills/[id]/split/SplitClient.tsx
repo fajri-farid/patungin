@@ -351,6 +351,7 @@ export function SplitClient({ initialBill }: SplitClientProps) {
       />
 
       <main id="bill-content" tabIndex={-1} className={ui.main}>
+        <fieldset disabled={proceedPending} className="contents">
         <StepIntro activeStep="split" />
         {saveError && (
           <p
@@ -372,7 +373,10 @@ export function SplitClient({ initialBill }: SplitClientProps) {
           className={`${ui.panel} space-y-4`}
         >
           <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-[#D8E2F2]">
-            <div className="flex items-start gap-2">
+            <div className="flex items-start gap-2.5">
+              <span className="w-7 h-7 rounded-lg bg-[#E6EDFF] text-[#2855D9] flex items-center justify-center shrink-0 mt-0.5">
+                <Users className="w-4 h-4" aria-hidden="true" />
+              </span>
               <div>
                 <h2 id="heading-peserta" className={ui.sectionTitle}>
                   Siapa saja yang ikut? ({bill.participants.length})
@@ -459,7 +463,7 @@ export function SplitClient({ initialBill }: SplitClientProps) {
                       <button
                         type="button"
                         onClick={() => handleRemoveParticipant(p.id)}
-                        className="w-11 h-11 shrink-0 rounded-full bg-[#F4F7FC] hover:bg-[#FDECEC] text-[#7687A6] hover:text-[#B42318] flex items-center justify-center text-xs cursor-pointer transition-colors"
+                        className="w-9 h-9 shrink-0 rounded-full bg-[#F4F7FC] hover:bg-[#FDECEC] text-[#7687A6] hover:text-[#B42318] flex items-center justify-center text-xs cursor-pointer transition-colors"
                         aria-label={`Hapus peserta ${p.name}`}
                       >
                         <X className="w-3.5 h-3.5" aria-hidden="true" />
@@ -537,7 +541,10 @@ export function SplitClient({ initialBill }: SplitClientProps) {
           {/* Header Bagian 2 + Progress Bar */}
           <div className="space-y-3 pb-3 border-b border-[#D8E2F2]">
             <div className="flex items-start justify-between gap-2">
-              <div className="flex items-start gap-2">
+              <div className="flex items-start gap-2.5">
+                <span className="w-7 h-7 rounded-lg bg-[#E6EDFF] text-[#2855D9] flex items-center justify-center shrink-0 mt-0.5">
+                  <HandPlatter className="w-4 h-4" aria-hidden="true" />
+                </span>
                 <div>
                   <h2 className={ui.sectionTitle}>Pilih siapa pesan apa</h2>
                   <p className="text-xs text-[#4A5B7C]">
@@ -590,7 +597,7 @@ export function SplitClient({ initialBill }: SplitClientProps) {
                 aria-valuenow={progressPct}
               >
                 <div
-                  className={`h-full rounded-full ${
+                  className={`h-full rounded-full transition-all duration-300 ease-out ${
                     progressPct === 100 ? "bg-[#146346]" : "bg-[#2855D9]"
                   }`}
                   style={{ width: `${progressPct}%` }}
@@ -773,12 +780,13 @@ export function SplitClient({ initialBill }: SplitClientProps) {
             )}
           </div>
         </section>
+        </fieldset>
       </main>
 
       {/* Bottom Sheet Alokasi Item */}
       {activeSheetItem && activeSheetAlloc && (
         <div
-          className="fixed inset-0 z-50 bg-[#17233B]/50 backdrop-blur-xs flex items-end justify-center"
+          className={`${ui.sheetBackdrop} fixed inset-0 z-50 bg-[#17233B]/50 backdrop-blur-xs flex items-end justify-center`}
           onClick={() => setActiveSheetItemId(null)}
         >
           <div
@@ -786,7 +794,7 @@ export function SplitClient({ initialBill }: SplitClientProps) {
             aria-modal="true"
             aria-labelledby="sheet-item-title"
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-xl bg-white rounded-t-3xl p-5 shadow-xl space-y-4 max-h-[85svh] overflow-y-auto overscroll-contain pb-[max(20px,env(safe-area-inset-bottom))]"
+            className={`${ui.sheetPanel} w-full max-w-xl bg-white rounded-t-3xl p-5 shadow-xl space-y-4 max-h-[85svh] overflow-y-auto overscroll-contain pb-[max(20px,env(safe-area-inset-bottom))]`}
           >
             {/* Mobile Drag Handle Indicator */}
             <div

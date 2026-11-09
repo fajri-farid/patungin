@@ -53,8 +53,12 @@ export default async function BillResultPage({
     config.share.isConfigured
       ? signShareToken(bill.activeShareId)
       : null;
+  const [resolvedShare, initialPhoto] = await Promise.all([
+    candidateShareToken ? resolvePublicShareToken(candidateShareToken) : null,
+    getOwnerPhotoInfo(bill),
+  ]);
   const existingShareToken =
-    candidateShareToken && (await resolvePublicShareToken(candidateShareToken))
+    candidateShareToken && resolvedShare
       ? candidateShareToken
       : null;
 
@@ -65,7 +69,7 @@ export default async function BillResultPage({
       initialShareToken={existingShareToken}
       appOrigin={config.appOrigin}
       shareLinksEnabled={config.share.linksEnabled}
-      initialPhoto={await getOwnerPhotoInfo(bill)}
+      initialPhoto={initialPhoto}
       photoSharingEnabled={config.receipts.sharingEnabled}
     />
   );

@@ -1,23 +1,34 @@
 "use client";
 
 import { processReceiptImageOnClient } from "@/lib/receipt-image-client";
-import { loadReceiptState, uploadReceiptFile } from "@/lib/receipt-photo-client";
-import { rememberReceiptPreview, forgetReceiptPreview } from "@/lib/local-receipt-preview";
+import { requestJson, RequestInterruptedError } from "@/lib/request-json";
+import { SlowOperationNotice } from "@/components/SlowOperationNotice";
+import {
+  loadReceiptState,
+  uploadReceiptFile,
+} from "@/lib/receipt-photo-client";
+import {
+  rememberReceiptPreview,
+  forgetReceiptPreview,
+} from "@/lib/local-receipt-preview";
 import React, { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   Camera,
+  CheckCircle2,
   Clock,
   FilePenLine,
   ImagePlus,
   Loader2,
   RotateCw,
   ScanLine,
+  ShieldCheck,
   Sparkles,
   X,
 } from "lucide-react";
 import { AppHeader } from "@/components/product/AppHeader";
+import { ReceiptImageSkeleton } from "@/components/product/ProductLoading";
 import ui from "@/components/product/product.module.css";
 import { createBillAction } from "@/app/actions/bills";
 
@@ -30,8 +41,14 @@ export interface ScanQuotaStatus {
   bonus: number;
   remaining: number;
 }
-interface NewBillClientProps { embedded?: boolean; quotaStatus: ScanQuotaStatus; receiptsEnabled?: boolean }
 
+interface NewBillClientProps {
+  embedded?: boolean;
+  quotaStatus: ScanQuotaStatus;
+  receiptsEnabled?: boolean;
+}
+
+type ProcessingPhase = "manual" | "optimize" | "upload" | "scan" | null;
 
 export function NewBillClient({
   quotaStatus,
@@ -43,16 +60,23 @@ export function NewBillClient({
   const galleryRef = useRef<HTMLInputElement>(null);
   const busyRef = useRef(false);
   const photoKeyRef = useRef(crypto.randomUUID());
+
   const [photo, setPhoto] = useState<string | null>(null);
+  const [isReadingFile, setIsReadingFile] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [stage, setStage] = useState<string | null>(null);
+  const [phase, setPhase] = useState<ProcessingPhase>(null);
+  const [uploadSkipped, setUploadSkipped] = useState(false);
+  const [scanNeedsReview, setScanNeedsReview] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdBill, setCreatedBill] = useState<{
     id: string;
     revision: number;
   } | null>(null);
+
   const remaining = quotaStatus.remaining;
-  const canScan = quotaStatus.scanEnabled && remaining > 0;
+  const canScan = quotaStatus.scanEnabled && remaining > 0 && !scanNeedsReview;
   const totalQuota = quotaStatus.monthlyLimit + quotaStatus.bonus;
   const usedQuota =
     typeof quotaStatus.usedThisMonth === "number"
@@ -66,10 +90,8 @@ export function NewBillClient({
   const isQuotaDepleted = remaining === 0;
   const Heading = embedded ? "h1" : "h2";
 
-  const selectFile = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file || busyRef.current) return;
+  const handleFile = (file: File | undefined) => {
+    if (!file || busyRef.current || isReadingFile) return;
     setError(null);
     if (/\.hei[cf]$/i.test(file.name)) {
       setError(
@@ -85,25 +107,44 @@ export function NewBillClient({
       setError("Pilih gambar JPG, PNG, atau WebP.");
       return;
     }
+    setIsReadingFile(true);
     const reader = new FileReader();
     reader.onload = () => {
+      setIsReadingFile(false);
       if (typeof reader.result === "string") {
         photoKeyRef.current = crypto.randomUUID();
         setPhoto(reader.result);
         setRotation(0);
       }
     };
-    reader.onerror = () => setError("Foto belum bisa dibuka. Pilih foto lagi.");
+    reader.onerror = () => {
+      setIsReadingFile(false);
+      setError("Foto belum bisa dibuka. Pilih foto lagi.");
+    };
     reader.readAsDataURL(file);
+  };
+
+  const selectFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    handleFile(file);
   };
 
   const start = async (manual = false) => {
     if (busyRef.current || (!manual && (!photo || !canScan))) return;
     busyRef.current = true;
     setError(null);
+    setUploadSkipped(false);
     let photoNotSaved = false;
     try {
-      setStage(manual ? "Menyiapkan tagihan…" : "Menyiapkan foto…");
+      if (manual) {
+        setPhase("manual");
+        setStage("Menyiapkan tagihan…");
+      } else {
+        setPhase("optimize");
+        setStage("Menyiapkan foto…");
+      }
+
       const processed =
         !manual && photo
           ? await processReceiptImageOnClient({
@@ -129,22 +170,32 @@ export function NewBillClient({
       if (processed) {
         rememberReceiptPreview(draft.id, processed.previewDataUrl);
         if (receiptsEnabled) {
+          setPhase("upload");
           setStage("Menyimpan foto selama 24 jam…");
           try {
-            const saved = await uploadReceiptFile(draft, processed.blob, `${photoKeyRef.current}_${rotation}`);
+            const saved = await uploadReceiptFile(
+              draft,
+              processed.blob,
+              `${photoKeyRef.current}_${rotation}`,
+            );
             draft = { id: saved.bill.id, revision: saved.bill.revision };
             setCreatedBill(draft);
             forgetReceiptPreview(draft.id);
           } catch {
             photoNotSaved = true;
+            setUploadSkipped(true);
             // Do not issue OCR against an uncertain revision after a lost upload response.
             const state = await loadReceiptState(draft.id);
-            if (state.bill.receiptPhotoUploadId) throw new ReceiptInputError("Foto masih diproses. Tunggu sebentar lalu coba lagi; scan belum dijalankan.");
+            if (state.bill.receiptPhotoUploadId)
+              throw new ReceiptInputError(
+                "Foto masih diproses. Tunggu sebentar lalu coba lagi; scan belum dijalankan.",
+              );
             draft = { id: state.bill.id, revision: state.bill.revision };
             setCreatedBill(draft);
             photoNotSaved = state.photo.status !== "available";
           }
         }
+        setPhase("scan");
         setStage("Membaca pesanan dan harga…");
         const form = new FormData();
         form.append(
@@ -156,29 +207,44 @@ export function NewBillClient({
           `scan_${draft.id}_${crypto.randomUUID()}`,
         );
         form.append("expectedRevision", String(draft.revision));
-        const response = await fetch(`/api/bills/${draft.id}/scan`, {
+        let scanResponse;
+        try {
+          scanResponse = await requestJson(`/api/bills/${draft.id}/scan`, {
           method: "POST",
           body: form,
-        });
-        const data = await response.json();
+          });
+        } catch {
+          // A lost response does not mean OCR failed. Do not spend quota on another attempt.
+          setScanNeedsReview(true);
+          throw new ReceiptInputError(
+            "Hasil scan belum bisa dipastikan. Buka draft untuk memeriksa hasilnya; scan tidak dikirim ulang agar kuotamu aman.",
+          );
+        }
+        const { response, result: data } = scanResponse;
         if (!response.ok || !data.ok)
           throw new ReceiptInputError(
             data.error ??
               "Struk belum terbaca. Coba lagi atau lanjut isi manual.",
           );
       }
-      router.push(`/bills/${draft.id}/review${photoNotSaved ? "?photo=not-saved" : ""}`);
+      router.push(
+        `/bills/${draft.id}/review${photoNotSaved ? "?photo=not-saved" : ""}`,
+      );
     } catch (err) {
       setError(
-        err instanceof ReceiptInputError
+        err instanceof ReceiptInputError || err instanceof RequestInterruptedError
           ? err.message
           : "Belum bisa melanjutkan. Periksa koneksi lalu coba lagi.",
       );
       setStage(null);
+      setPhase(null);
       busyRef.current = false;
       router.refresh();
     }
   };
+
+  const isProcessingPhoto =
+    phase === "optimize" || phase === "upload" || phase === "scan";
 
   const content = (
     <section
@@ -188,18 +254,22 @@ export function NewBillClient({
       <p role="status" className="sr-only">
         {stage}
       </p>
-      <div>
-        <Heading id="new-bill-heading" className={ui.sectionTitle}>
-          Masukkan struk
-        </Heading>
-        <p className={`${ui.muted} mt-2`}>
-          Foto struk atau pilih screenshot pesanan. Cek hasilnya sebelum dibagi.
-        </p>
+      {stage && <SlowOperationNotice />}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <Heading id="new-bill-heading" className={ui.sectionTitle}>
+            Masukkan struk
+          </Heading>
+          <p className={`${ui.muted} mt-1`}>
+            Foto struk atau pilih screenshot pesanan. Cek hasilnya sebelum
+            dibagi.
+          </p>
+        </div>
       </div>
 
       {/* Kartu Status Kuota Scan */}
       <div
-        className="rounded-2xl border border-[#D8E2F2] bg-gradient-to-b from-[#F9FBFF] to-[#F3F7FD] p-4 transition-all"
+        className="rounded-2xl border border-[#D8E2F2] bg-gradient-to-b from-[#F9FBFF] to-[#F3F7FD] p-4 transition-colors"
         role="region"
         aria-label="Informasi Kuota Scan Struk"
       >
@@ -217,7 +287,7 @@ export function NewBillClient({
               <Sparkles size={15} aria-hidden="true" />
             </span>
             <span className="text-xs font-bold uppercase tracking-wider text-[#4A5B7C]">
-              Kuota Bulan Ini
+              Kuota Scan Bulan Ini
             </span>
           </div>
 
@@ -249,7 +319,7 @@ export function NewBillClient({
               {remaining}
             </span>
             <span className="text-xs sm:text-sm font-medium text-[#7687A6]">
-              / {totalQuota} scan
+              / {totalQuota} scan tersisa
             </span>
           </div>
           {quotaStatus.bonus > 0 && (
@@ -259,7 +329,6 @@ export function NewBillClient({
           )}
         </div>
 
-        {/* Bar Indikator Sisa Kuota */}
         <div
           className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-[#E2E8F0]"
           role="progressbar"
@@ -280,10 +349,13 @@ export function NewBillClient({
           />
         </div>
 
-        {/* Detail Waktu Reset & Info Pemakaian */}
         <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-[#7687A6]">
           <div className="flex items-center gap-1.5">
-            <Clock size={13} className="text-[#4A5B7C] shrink-0" aria-hidden="true" />
+            <Clock
+              size={13}
+              className="text-[#4A5B7C] shrink-0"
+              aria-hidden="true"
+            />
             <span>
               Reset tanggal <strong>1, 00.00 WITA</strong>
             </span>
@@ -298,23 +370,25 @@ export function NewBillClient({
                 Sisa {remaining} scan lagi
               </span>
             ) : (
-              <span className="text-[#4A5B7C]">
-                {usedQuota} scan terpakai
-              </span>
+              <span className="text-[#4A5B7C]">{usedQuota} scan terpakai</span>
             )}
           </div>
         </div>
 
         {!canScan && (
           <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-[#FFE0BD] bg-[#FFF3E6] p-3 text-xs leading-relaxed text-[#9A4A12]">
-            <AlertTriangle size={16} className="mt-0.5 shrink-0 text-[#D97706]" aria-hidden="true" />
+            <AlertTriangle
+              size={16}
+              className="mt-0.5 shrink-0 text-[#D97706]"
+              aria-hidden="true"
+            />
             <div>
               <strong>
                 {quotaStatus.scanEnabled
                   ? "Kuota scan bulan ini sudah habis."
                   : "Fitur baca struk sedang tidak tersedia."}
               </strong>{" "}
-              Jangan khawatir! Kamu tetap bisa membuat tagihan tanpa batas dengan opsi{" "}
+              Kamu tetap bisa membuat tagihan tanpa batas dengan opsi{" "}
               <span className="font-bold underline">Isi manual</span> di bawah.
             </div>
           </div>
@@ -340,34 +414,44 @@ export function NewBillClient({
       />
 
       {error && (
-        <div role="alert" className={`${ui.error} flex items-start gap-2`}>
-          <AlertTriangle size={18} aria-hidden="true" />
+        <div role="alert" className={`${ui.error} flex items-start gap-2.5`}>
+          <AlertTriangle size={18} className="mt-0.5 shrink-0" aria-hidden="true" />
           <span>{error}</span>
         </div>
       )}
 
-      <p className="text-xs text-[#4A5B7C]">{receiptsEnabled ? "Foto disimpan sementara selama 24 jam. Berbagi foto ke teman bisa dipilih nanti." : "Foto dipakai untuk membaca struk. Penyimpanan foto sementara belum tersedia."}</p>
-      {photo ? (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm font-semibold">
-              Pastikan pesanan dan totalnya terlihat.
+      <div className="flex items-center gap-2 rounded-xl bg-[#F4F7FC] border border-[#E2EAF6] px-3 py-2 text-xs text-[#4A5B7C]">
+        <ShieldCheck size={15} className="shrink-0 text-[#2855D9]" aria-hidden="true" />
+        <span>
+          {receiptsEnabled
+            ? "Foto disimpan privat selama 24 jam. Berbagi foto ke teman bersifat opsional."
+            : "Foto dipakai untuk membaca struk. Penyimpanan foto sementara belum tersedia."}
+        </span>
+      </div>
+
+      {isReadingFile ? (
+        <ReceiptImageSkeleton label="Membuka foto dari perangkat…" />
+      ) : photo ? (
+        <div className="space-y-3.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-bold text-[#17233B]">
+              Pastikan nama pesanan dan total akhir terlihat jelas
             </p>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-1.5">
               <button
                 type="button"
                 disabled={!!stage}
                 onClick={() => setRotation((value) => (value + 90) % 360)}
-                className={`${ui.secondary} !min-h-11 !px-3 !py-2 !text-sm`}
+                className={`${ui.secondary} !min-h-11 !px-3 !py-1.5 !text-xs`}
               >
-                <RotateCw size={16} aria-hidden="true" />
+                <RotateCw size={15} aria-hidden="true" />
                 Putar
               </button>
               <button
                 type="button"
                 disabled={!!stage}
                 onClick={() => galleryRef.current?.click()}
-                className={`${ui.secondary} !min-h-11 !px-3 !py-2 !text-sm`}
+                className={`${ui.secondary} !min-h-11 !px-3 !py-1.5 !text-xs`}
               >
                 Ganti foto
               </button>
@@ -382,42 +466,154 @@ export function NewBillClient({
               </button>
             </div>
           </div>
-          <div className="rounded-xl bg-[#F4F7FC] border border-[#D8E2F2] overflow-hidden flex items-center justify-center p-4 h-72">
+
+          {/* Preview Frame + Live Scanning Animation */}
+          <div
+            className={`${ui.scanViewport} flex h-72 items-center justify-center rounded-2xl border border-[#D8E2F2] bg-[#EEF3FB] p-4`}
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={photo}
               alt="Foto struk yang akan dibaca"
               style={{ transform: `rotate(${rotation}deg)` }}
-              className="max-h-60 max-w-full object-contain"
+              className="max-h-60 max-w-full rounded-lg object-contain shadow-xs transition-transform duration-200"
             />
+
+            {isProcessingPhoto && (
+              <div className={ui.scanOverlay} aria-hidden="true">
+                <div className={ui.scanFrame} />
+                <div className={ui.scanBeam} />
+                <span className="relative z-10 inline-flex items-center gap-2 rounded-full border border-white/40 bg-[#17233B]/85 px-4 py-2 text-xs font-bold text-white shadow-md">
+                  <Loader2 size={14} className={ui.spinner} />
+                  {stage}
+                </span>
+              </div>
+            )}
           </div>
+
+          {/* Real Multi-Stage Progress Tracker while processing */}
+          {isProcessingPhoto && (
+            <div
+              role="region"
+              aria-label="Tahap pemrosesan struk"
+              className="rounded-2xl border border-[#9DC0FB] bg-gradient-to-b from-[#F4F8FF] to-white p-3.5 space-y-3"
+            >
+              <div className={ui.indeterminateTrack} aria-hidden="true">
+                <div className={ui.indeterminateBar} />
+              </div>
+              <ol className="space-y-2 text-xs">
+                <li className="flex items-center justify-between gap-2">
+                  <span
+                    className={`inline-flex items-center gap-2 font-bold ${
+                      phase === "optimize"
+                        ? "text-[#2855D9]"
+                        : "text-[#146346]"
+                    }`}
+                  >
+                    {phase === "optimize" ? (
+                      <Loader2 size={14} className={ui.spinner} aria-hidden="true" />
+                    ) : (
+                      <CheckCircle2 size={14} aria-hidden="true" />
+                    )}
+                    1. Menyiapkan & merapikan foto
+                  </span>
+                  <span className="text-[#7687A6]">
+                    {phase === "optimize" ? "Berjalan" : "Selesai"}
+                  </span>
+                </li>
+
+                {receiptsEnabled && (
+                  <li className="flex items-center justify-between gap-2">
+                    <span
+                      className={`inline-flex items-center gap-2 font-bold ${
+                        phase === "upload"
+                          ? "text-[#2855D9]"
+                          : phase === "scan"
+                            ? uploadSkipped
+                              ? "text-[#9A4A12]"
+                              : "text-[#146346]"
+                            : "text-[#7687A6]"
+                      }`}
+                    >
+                      {phase === "upload" ? (
+                        <Loader2 size={14} className={ui.spinner} aria-hidden="true" />
+                      ) : phase === "scan" ? (
+                        uploadSkipped ? (
+                          <AlertTriangle size={14} aria-hidden="true" />
+                        ) : (
+                          <CheckCircle2 size={14} aria-hidden="true" />
+                        )
+                      ) : (
+                        <span className="inline-block h-3.5 w-3.5 rounded-full border border-[#CBD5E1]" />
+                      )}
+                      2. Menyimpan foto referensi 24 jam
+                    </span>
+                    <span className="text-[#7687A6]">
+                      {phase === "upload"
+                        ? "Mengunggah"
+                        : phase === "scan"
+                          ? uploadSkipped
+                            ? "Lanjut lokal"
+                            : "Tersimpan"
+                          : "Menunggu"}
+                    </span>
+                  </li>
+                )}
+
+                <li className="flex items-center justify-between gap-2">
+                  <span
+                    className={`inline-flex items-center gap-2 font-bold ${
+                      phase === "scan" ? "text-[#2855D9]" : "text-[#7687A6]"
+                    }`}
+                  >
+                    {phase === "scan" ? (
+                      <Loader2 size={14} className={ui.spinner} aria-hidden="true" />
+                    ) : (
+                      <span className="inline-block h-3.5 w-3.5 rounded-full border border-[#CBD5E1]" />
+                    )}
+                    {receiptsEnabled ? "3." : "2."} Membaca daftar pesanan & harga
+                  </span>
+                  <span className="text-[#7687A6]">
+                    {phase === "scan" ? "Mengekstrak" : "Menunggu"}
+                  </span>
+                </li>
+              </ol>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={() => start()}
             disabled={!!stage || !canScan}
             className={`${ui.primary} w-full`}
-            aria-busy={!!stage}
+            aria-busy={isProcessingPhoto}
           >
-            {stage ? (
+            {isProcessingPhoto ? (
               <Loader2 size={18} className={ui.spinner} aria-hidden="true" />
             ) : (
               <ScanLine size={18} aria-hidden="true" />
             )}
-            {stage ?? "Baca struk"}
+            {isProcessingPhoto ? stage : "Baca struk"}
           </button>
+
           <button
             type="button"
             onClick={() => start(true)}
             disabled={!!stage}
             className={`${ui.secondary} w-full`}
+            aria-busy={phase === "manual"}
           >
-            Isi manual saja
+            {phase === "manual" && (
+              <Loader2 size={17} className={ui.spinner} aria-hidden="true" />
+            )}
+            {phase === "manual" ? "Menyiapkan tagihan…" : scanNeedsReview ? "Buka draft dan periksa hasil" : "Isi manual saja"}
           </button>
-          <details className="text-sm text-[#4A5B7C]">
-            <summary className="min-h-11 flex items-center cursor-pointer font-semibold">
+
+          <details className="rounded-xl border border-[#E2EAF6] bg-[#F8FAFF] px-3.5 py-2 text-xs text-[#4A5B7C]">
+            <summary className="flex min-h-10 cursor-pointer items-center font-bold text-[#17233B]">
               Bagaimana foto digunakan?
             </summary>
-            <p className="pt-2">
+            <p className="pb-1.5 pt-1 leading-relaxed">
               Foto dikirim ke Google Gemini untuk membaca pesanan dan harga.
               {receiptsEnabled
                 ? " Salinan foto disimpan privat selama masa akses 24 jam, lalu dihapus otomatis. Foto hanya ikut link jika kamu memilih."
@@ -426,49 +622,74 @@ export function NewBillClient({
           </details>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div
+          onDragOver={(event) => {
+            if (!canScan || !!stage) return;
+            event.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={(event) => {
+            event.preventDefault();
+            setIsDragging(false);
+            if (!canScan || !!stage) return;
+            handleFile(event.dataTransfer.files?.[0]);
+          }}
+          className={`space-y-4 rounded-2xl transition-colors ${
+            isDragging
+              ? "ring-2 ring-[#2855D9] ring-offset-4 bg-[#EEF4FF]/60 p-2"
+              : ""
+          }`}
+        >
           <div className="grid grid-cols-2 gap-3">
             <button
               type="button"
               onClick={() => cameraRef.current?.click()}
               disabled={!!stage || !canScan}
-              className="min-h-24 p-3 rounded-xl bg-[#2855D9] hover:bg-[#1E44B8] text-white font-bold text-sm flex flex-col items-center justify-center gap-2 text-center cursor-pointer disabled:opacity-40"
+              className="group flex min-h-28 flex-col items-center justify-center gap-1.5 rounded-2xl bg-[#2855D9] p-3.5 text-center text-white shadow-xs hover:bg-[#1E44B8] disabled:opacity-40 cursor-pointer"
             >
-              <Camera size={27} aria-hidden="true" />
-              <span>Foto struk</span>
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15">
+                <Camera size={24} aria-hidden="true" />
+              </span>
+              <span className="text-sm font-extrabold">Foto struk</span>
+              <span className="text-[11px] font-medium text-white/85">
+                Buka kamera
+              </span>
             </button>
+
             <button
               type="button"
               onClick={() => galleryRef.current?.click()}
               disabled={!!stage || !canScan}
-              className="min-h-24 p-3 rounded-xl border border-[#A8C7FA] bg-[#E6EDFF] hover:bg-[#D8E5FF] text-[#1E44B8] font-bold text-sm flex flex-col items-center justify-center gap-2 text-center cursor-pointer disabled:opacity-40"
+              className="group flex min-h-28 flex-col items-center justify-center gap-1.5 rounded-2xl border border-[#B4CCFA] bg-[#EEF4FF] p-3.5 text-center text-[#1E44B8] hover:bg-[#E1ECFF] disabled:opacity-40 cursor-pointer"
             >
-              <ImagePlus size={27} aria-hidden="true" />
-              <span>Pilih dari galeri</span>
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-[#2855D9] border border-[#D4E2FC]">
+                <ImagePlus size={24} aria-hidden="true" />
+              </span>
+              <span className="text-sm font-extrabold">Pilih dari galeri</span>
+              <span className="text-[11px] font-medium text-[#4A5B7C]">
+                JPG, PNG, WebP
+              </span>
             </button>
           </div>
-          {canScan && (
-            <p className="text-center text-sm text-[#4A5B7C]">
-              Bisa baca {remaining} struk lagi bulan ini.
-            </p>
-          )}
-          <div className="pt-4 border-t border-[#D8E2F2]">
+
+          <div className="pt-3 border-t border-[#D8E2F2]">
             <button
               type="button"
               onClick={() => start(true)}
               disabled={!!stage}
               className={`${canScan ? ui.secondary : ui.primary} w-full`}
-              aria-busy={!!stage}
+              aria-busy={phase === "manual"}
             >
-              {stage ? (
+              {phase === "manual" ? (
                 <Loader2 size={18} className={ui.spinner} aria-hidden="true" />
               ) : (
                 <FilePenLine size={18} aria-hidden="true" />
               )}
-              {stage ?? "Isi manual"}
+              {phase === "manual" ? "Menyiapkan tagihan…" : "Isi manual"}
             </button>
-            <p className="mt-2 text-sm text-center text-[#4A5B7C]">
-              Tanpa foto? Ketik nama pesanan dan harganya.
+            <p className="mt-2 text-center text-xs text-[#4A5B7C]">
+              Tanpa foto struk? Ketik nama pesanan dan harganya langsung.
             </p>
           </div>
         </div>
