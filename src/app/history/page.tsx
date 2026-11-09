@@ -1,7 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRight, ReceiptText } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  Clock,
+  ReceiptText,
+} from "lucide-react";
 import { formatRupiah } from "@/domain/billing/money";
 import { getAuthenticatedHost } from "@/server/auth/session";
 import { listBillsByOwner } from "@/server/store/repository";
@@ -48,7 +54,12 @@ export default async function HistoryPage({
 
   return (
     <div className={ui.page}>
-      <AppHeader history />
+      <AppHeader
+        email={host.email}
+        admin={host.isAdmin}
+        history
+        activePage="history"
+      />
       <main className={ui.main}>
         <div className={ui.intro}>
           <h1>Riwayat tagihan.</h1>
@@ -59,6 +70,9 @@ export default async function HistoryPage({
         <section className={ui.panel} aria-label="Daftar tagihan tersimpan">
           {bills.length === 0 && (params.after || params.before) ? (
             <div className={ui.empty}>
+              <div className={ui.emptyIconWrap} aria-hidden="true">
+                <ReceiptText size={24} />
+              </div>
               <h2>Halaman ini sudah kosong.</h2>
               <p>Daftar tagihan mungkin sudah berubah.</p>
               <Link href="/history" className={ui.secondary}>
@@ -67,7 +81,9 @@ export default async function HistoryPage({
             </div>
           ) : bills.length === 0 ? (
             <div className={ui.empty}>
-              <ReceiptText size={34} aria-hidden="true" />
+              <div className={ui.emptyIconWrap} aria-hidden="true">
+                <ReceiptText size={24} />
+              </div>
               <h2>Belum ada tagihan.</h2>
               <p>
                 Mulai patungan pertamamu. Hasilnya bisa kamu buka lagi di sini.
@@ -78,42 +94,57 @@ export default async function HistoryPage({
             </div>
           ) : (
             <div className={ui.billList}>
-              {bills.map((bill) => (
-                <div className={ui.billRow} key={bill.id}>
-                  <Link
-                    href={`/bills/${bill.id}/${bill.status === "finalized" ? "result" : bill.confirmedInputHash ? "split" : "review"}`}
-                    className={ui.billLink}
-                  >
-                    <div className={ui.billRowTop}>
-                      <span className={ui.billTitle}>{bill.title}</span>
-                      <span className={`${ui.billAmount} tabular-money`}>
-                        {bill.confirmedGrandTotal === null
-                          ? "Total belum diisi"
-                          : formatRupiah(bill.confirmedGrandTotal)}
-                      </span>
-                    </div>
-                    <div className={ui.billMetadata}>
-                      <span
-                        className={`${ui.badge} ${bill.status === "finalized" ? ui.badgeReady : ""}`}
-                      >
-                        {bill.status === "finalized"
-                          ? "Siap dibagikan"
-                          : "Belum selesai"}
-                      </span>
-                      <span>
-                        {bill.merchant || "Tempat belum diisi"} ·{" "}
-                        {bill.items.length} pesanan · {bill.participants.length}{" "}
-                        orang
-                      </span>
-                    </div>
-                  </Link>
-                  <ArrowRight
-                    size={17}
-                    className="text-[#4A5B7C]"
-                    aria-hidden="true"
-                  />
-                </div>
-              ))}
+              {bills.map((bill) => {
+                const isFinalized = bill.status === "finalized";
+                return (
+                  <div className={ui.billRow} key={bill.id}>
+                    <Link
+                      href={`/bills/${bill.id}/${isFinalized ? "result" : bill.confirmedInputHash ? "split" : "review"}`}
+                      className={ui.billLink}
+                    >
+                      <div className={ui.billRowTop}>
+                        <span className={ui.billTitle}>{bill.title}</span>
+                        <span className={`${ui.billAmount} tabular-money`}>
+                          {bill.confirmedGrandTotal === null
+                            ? "Total belum diisi"
+                            : formatRupiah(bill.confirmedGrandTotal)}
+                        </span>
+                      </div>
+                      <div className={ui.billMetadata}>
+                        <span
+                          className={`${ui.badge} ${
+                            isFinalized ? ui.badgeReady : ""
+                          }`}
+                        >
+                          {isFinalized ? (
+                            <>
+                              <CheckCircle2 size={12} aria-hidden="true" />
+                              Siap dibagikan
+                            </>
+                          ) : (
+                            <>
+                              <Clock size={12} aria-hidden="true" />
+                              {bill.confirmedInputHash
+                                ? "Bagi pesanan"
+                                : "Cek struk"}
+                            </>
+                          )}
+                        </span>
+                        <span>
+                          {bill.merchant || "Tempat belum diisi"} ·{" "}
+                          {bill.items.length} pesanan ·{" "}
+                          {bill.participants.length} orang
+                        </span>
+                      </div>
+                    </Link>
+                    <ArrowRight
+                      size={17}
+                      className="shrink-0 text-[#7687A6]"
+                      aria-hidden="true"
+                    />
+                  </div>
+                );
+              })}
             </div>
           )}
           {(previousCursor || nextCursor) && (
@@ -127,6 +158,7 @@ export default async function HistoryPage({
                   className={ui.secondary}
                   prefetch={false}
                 >
+                  <ArrowLeft size={16} aria-hidden="true" />
                   Sebelumnya
                 </Link>
               ) : (

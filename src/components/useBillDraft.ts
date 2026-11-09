@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { saveDraftAction } from "@/app/actions/bills";
+import { saveUntilCurrent } from "@/lib/save-until-current";
 import type { SaveBillDraftPatch } from "@/server/store/repository";
 import type { BillDocument } from "@/domain/billing/types";
 import type { SaveStatus } from "./StepHeader";
@@ -19,6 +20,8 @@ export function useBillDraft(
   const latest = useRef(initialBill);
   const revision = useRef(initialBill.revision);
   const editSequence = useRef(0);
+  const savedSequence = useRef(0);
+  const confirmedSequence = useRef(-1);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const queue = useRef<Promise<BillDocument | null>>(
     Promise.resolve(initialBill),
@@ -53,34 +56,45 @@ export function useBillDraft(
       return Promise.resolve(latest.current);
     setSaveStatus("saving");
     const run = async () => {
+      // A debounce may already have queued this save while an earlier save drained edits.
+      if (savedSequence.current === editSequence.current &&
+          (!markReviewConfirmed || confirmedSequence.current === editSequence.current)) {
+        setSaveStatus("saved");
+        return latest.current;
+      }
       setSaveStatus("saving");
-      const sequence = editSequence.current;
       try {
-        const response = await saveDraftAction(latest.current.id, {
-          ...patchBuilder.current(latest.current),
-          expectedRevision: revision.current,
-          markReviewConfirmed,
+        return await saveUntilCurrent({
+          sequence: () => editSequence.current,
+          save: async () => {
+            if (timer.current) clearTimeout(timer.current);
+            const response = await saveDraftAction(latest.current.id, {
+              ...patchBuilder.current(latest.current),
+              expectedRevision: revision.current,
+              markReviewConfirmed,
+            });
+            if (!response.ok || !response.data) {
+              setSaveStatus("error");
+              setSaveError(response.error ?? "Perubahan belum tersimpan. Coba simpan lagi.");
+              return null;
+            }
+            return response.data;
+          },
+          accept: (saved, current) => {
+            revision.current = saved.revision;
+            if (current) {
+              savedSequence.current = editSequence.current;
+              if (markReviewConfirmed) confirmedSequence.current = editSequence.current;
+              latest.current = saved;
+              setBill(saved);
+              setSaveStatus("saved");
+            }
+            setSaveError(null);
+          },
         });
-        if (!response.ok || !response.data) {
-          setSaveStatus("error");
-          setSaveError(
-            response.error ?? "Perubahan belum tersimpan. Coba simpan lagi.",
-          );
-          return null;
-        }
-        revision.current = response.data.revision;
-        if (sequence === editSequence.current) {
-          latest.current = response.data;
-          setBill(response.data);
-          setSaveStatus("saved");
-        }
-        setSaveError(null);
-        return response.data;
       } catch {
         setSaveStatus("error");
-        setSaveError(
-          "Perubahan belum tersimpan. Periksa koneksi lalu coba simpan lagi.",
-        );
+        setSaveError("Perubahan belum tersimpan. Periksa koneksi lalu coba simpan lagi.");
         return null;
       }
     };
@@ -107,6 +121,9 @@ export function useBillDraft(
   const replaceBill = (next: BillDocument) => {
     latest.current = next;
     revision.current = next.revision;
+    savedSequence.current = editSequence.current;
+    if (timer.current) clearTimeout(timer.current);
+    setSaveError(null);
     setBill(next);
     setSaveStatus("saved");
   };

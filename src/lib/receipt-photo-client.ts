@@ -1,5 +1,6 @@
 import type { BillDocument } from "@/domain/billing/types";
 import type { ReceiptPhotoInfo } from "@/domain/receipts";
+import { requestJson } from "./request-json";
 
 export async function uploadReceiptFile(
   bill: Pick<BillDocument, "id" | "revision">,
@@ -14,26 +15,24 @@ export async function uploadReceiptFile(
   );
   form.append("expectedRevision", String(bill.revision));
   form.append("idempotencyKey", key);
-  const response = await fetch(`/api/bills/${bill.id}/receipt-photo`, {
+  const { response, result } = await requestJson<{ bill: BillDocument; photo: ReceiptPhotoInfo }>(`/api/bills/${bill.id}/receipt-photo`, {
     method: "POST",
     body: form,
   });
-  const result = await response.json();
   if (result.code === "UPLOAD_RETRY_REQUIRED" && allowFreshAttempt) {
     return uploadReceiptFile(bill, blob, crypto.randomUUID(), false);
   }
-  if (!response.ok || !result.ok)
+  if (!response.ok || !result.ok || !result.data)
     throw new Error(result.error ?? "Foto belum tersimpan.");
   return result.data as { bill: BillDocument; photo: ReceiptPhotoInfo };
 }
 
 /** Reconcile uncertain upload commits before issuing a revision-dependent scan. */
 export async function loadReceiptState(billId: string) {
-  const response = await fetch(`/api/bills/${billId}/receipt-photo?info=1`, {
+  const { response, result } = await requestJson<{ bill: BillDocument; photo: ReceiptPhotoInfo }>(`/api/bills/${billId}/receipt-photo?info=1`, {
     cache: "no-store",
-  });
-  const result = await response.json();
-  if (!response.ok || !result.ok)
+  }, 15_000);
+  if (!response.ok || !result.ok || !result.data)
     throw new Error(
       result.error ?? "Status tagihan belum bisa diperiksa. Coba lagi.",
     );

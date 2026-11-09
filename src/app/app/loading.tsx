@@ -1,1 +1,1 @@
-export { ProductLoading as default } from "@/components/product/ProductLoading";
+export { DashboardSkeleton as default } from "@/components/product/ProductLoading";

@@ -9,7 +9,9 @@ export default function BillNotFound() {
       <AppHeader />
       <main className={ui.main}>
         <section className={`${ui.panel} ${ui.empty}`}>
-          <ReceiptText size={34} aria-hidden="true" />
+          <div className={ui.emptyIconWrap} aria-hidden="true">
+            <ReceiptText size={24} />
+          </div>
           <h1 className={ui.sectionTitle}>Tagihan tidak ditemukan.</h1>
           <p>
             Tagihan ini mungkin sudah dihapus. Buka daftar untuk melihat

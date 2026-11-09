@@ -1,7 +1,1 @@
-export default function Loading() {
-  return (
-    <main className="p-8 text-center text-sm" role="status">
-      Memuat pengaturan pembayaran…
-    </main>
-  );
-}
+export { PaymentSettingsSkeleton as default } from "@/components/product/ProductLoading";
