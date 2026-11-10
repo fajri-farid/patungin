@@ -190,8 +190,10 @@ export function QrisImageUpload({
 
       <p className="text-xs text-[#4A5B7C]">
         Gunakan QRIS statis untuk dipakai ulang. JPG, PNG, atau WebP maksimal 2
-        MiB. Gambar QRIS tetap tersedia selama masih dipakai profil atau
-        tagihan, terpisah dari foto struk 24 jam.
+        MiB. Perubahan gambar berlaku setelah tujuan pembayaran disimpan.
+        Gambar QRIS tetap tersedia selama masih dipakai profil atau tagihan.
+        Setelah tidak dipakai lagi, gambar menunggu 24 jam sebelum dibersihkan
+        otomatis pada jadwal berikutnya.
       </p>
     </div>
   );

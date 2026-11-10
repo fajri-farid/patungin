@@ -67,4 +67,17 @@ describe("QRIS storage diagnostics without secret leakage", () => {
     expect(body.error).toContain("disimpan");
     expect(JSON.stringify(body)).not.toContain("sensitive");
   });
+  it("logs a safe request ID and specific validation code for rejected uploads", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const response = qrisError(new AppServiceError(422, "QRIS_RESOLUTION_TOO_LARGE", "Resolusi terlalu besar."), "upload");
+    const body = await response.json();
+    expect(response.status).toBe(422);
+    expect(body.code).toBe("QRIS_RESOLUTION_TOO_LARGE");
+    expect(warn).toHaveBeenCalledWith("qris_request_failed", {
+      requestId: body.requestId,
+      operation: "upload",
+      code: "QRIS_RESOLUTION_TOO_LARGE",
+    });
+    expect(body.requestId).toBe(response.headers.get("x-request-id"));
+  });
 });

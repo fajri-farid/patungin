@@ -12,8 +12,7 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
-export async function POST(request: Request) {
-  const secret = getServerConfig().receipts.cleanupSecret;
+async function runCleanup(request: Request, secret: string, drain: boolean) {
   const expected = Buffer.from(`Bearer ${secret}`);
   const provided = Buffer.from(request.headers.get("authorization") ?? "");
   if (
@@ -42,17 +41,37 @@ export async function POST(request: Request) {
           : await reconcileReceiptObjects(cursor);
     } else {
       const deadline = Date.now() + 25000;
-      const receipts = await cleanupReceiptPhotos(25, deadline);
-      const qris = await cleanupQrisImages(25, deadline);
-      result = {
-        ...receipts,
-        qris,
-        processed: receipts.processed + qris.processed,
-        deleted: receipts.deleted + qris.deleted,
-        failed: receipts.failed + qris.failed,
-        hasMore: receipts.hasMore || qris.hasMore,
+      const totals = {
+        processed: 0, deleted: 0, failed: 0, hasMore: false,
+        oldestDueAt: null as string | null,
+        qris: { processed: 0, deleted: 0, failed: 0, hasMore: false },
       };
+      // Separate collections can progress concurrently: receipt IO must not
+      // consume the entire function budget before QRIS gets a turn.
+      for (let batch = 0; batch < (drain ? 10 : 1); batch++) {
+        if (batch > 0 && Date.now() >= deadline) break;
+        const [receipts, qris] = await Promise.all([
+          cleanupReceiptPhotos(25, deadline),
+          cleanupQrisImages(25, deadline),
+        ]);
+        totals.processed += receipts.processed + qris.processed;
+        totals.deleted += receipts.deleted + qris.deleted;
+        totals.failed += receipts.failed + qris.failed;
+        totals.hasMore = receipts.hasMore || qris.hasMore;
+        for (const oldestDueAt of [receipts.oldestDueAt, qris.oldestDueAt]) {
+          if (oldestDueAt && (!totals.oldestDueAt || oldestDueAt < totals.oldestDueAt)) {
+            totals.oldestDueAt = oldestDueAt;
+          }
+        }
+        totals.qris.processed += qris.processed;
+        totals.qris.deleted += qris.deleted;
+        totals.qris.failed += qris.failed;
+        totals.qris.hasMore = qris.hasMore;
+        if (!totals.hasMore) break;
+      }
+      result = totals;
     }
+    console.info("image_cleanup", { source: drain ? "vercel-cron" : "external-scheduler", ...result });
     return Response.json(
       { ok: true, data: result },
       { headers: PRIVATE_HEADERS },
@@ -63,4 +82,14 @@ export async function POST(request: Request) {
       { status: 503, headers: PRIVATE_HEADERS },
     );
   }
+}
+
+// Vercel Cron invokes GET and supplies its own CRON_SECRET bearer token.
+// Keep the external POST scheduler's credential separate and fail closed when unset.
+export async function GET(request: Request) {
+  return runCleanup(request, process.env.CRON_SECRET?.trim() ?? "", true);
+}
+
+export async function POST(request: Request) {
+  return runCleanup(request, getServerConfig().receipts.cleanupSecret, false);
 }

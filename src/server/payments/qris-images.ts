@@ -1,5 +1,4 @@
 import crypto from "node:crypto";
-import sharp from "sharp";
 import {
   MAX_QRIS_BYTES,
   QRIS_IMAGE_ID,
@@ -14,6 +13,7 @@ import { readDevDb } from "../store/dev-database";
 import { verifyShareTokenSignature } from "../shares/token";
 import { reservePublicRead } from "../receipts/photos";
 import { qrisIds } from "./qris-references";
+import { normalizeQrisImage } from "./qris-image-processing";
 import {
   deleteQrisBytes,
   listQrisObjects,
@@ -84,38 +84,7 @@ export async function uploadQrisImage(ownerUid: string, bytes: Buffer) {
   });
   let generation: string | null = null;
   try {
-    let output: Buffer;
-    try {
-      const image = sharp(bytes, {
-        limitInputPixels: 16_000_000,
-        failOn: "warning",
-        animated: false,
-      });
-      const meta = await image.metadata();
-      if (
-        !["jpeg", "png", "webp"].includes(meta.format ?? "") ||
-        (meta.pages ?? 1) > 1
-      )
-        throw new Error("Unsupported format");
-      output = await image
-        .rotate()
-        .resize({
-          width: 2400,
-          height: 2400,
-          fit: "inside",
-          withoutEnlargement: true,
-        })
-        .flatten({ background: "#ffffff" })
-        .png()
-        .toBuffer();
-      if (output.length > MAX_QRIS_BYTES) throw new Error("Output too large");
-    } catch {
-      throw new AppServiceError(
-        422,
-        "INVALID_QRIS_IMAGE",
-        "Gambar belum bisa dibaca atau terlalu besar. Pilih JPG, PNG, atau WebP QRIS yang jelas, maksimal 2 MiB.",
-      );
-    }
+    const output = await normalizeQrisImage(bytes);
     generation = await storeQrisBytes(record, output);
     await productTransaction(async (tx) => {
       const current = await tx.get<QrisImageRecord>("qrisImages", record.id);
@@ -282,6 +251,7 @@ export async function cleanupQrisImages(
     processed,
     deleted,
     failed,
+    oldestDueAt: candidates[0]?.nextCleanupAt ?? null,
     hasMore: candidates.length === maximum || processed < candidates.length,
   };
 }

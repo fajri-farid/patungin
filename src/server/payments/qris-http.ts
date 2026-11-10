@@ -67,7 +67,7 @@ export function qrisError(
         "Layanan penyimpanan QRIS sedang dibatasi. Tunggu sebentar lalu coba lagi.";
     }
   }
-  if (status >= 500)
+  if (status >= 500 || (operation === "upload" && status === 422))
     console.warn("qris_request_failed", { requestId, operation, code });
   return Response.json(
     { ok: false, code, error: message, requestId },

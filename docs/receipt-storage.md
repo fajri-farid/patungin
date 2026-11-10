@@ -18,6 +18,8 @@ Di **Pengaturan → Tujuan pembayaran → Tambah tujuan pembayaran → QRIS**, u
 
 QRIS memakai prefix **`payment-qris/`**, bukan `receipts/`. Gambar tetap disimpan selama masih dipakai oleh profil atau tagihan, termasuk snapshot final yang dipertahankan. Mengganti/menghapus QRIS pada profil tidak mengubah gambar pada tagihan lama. File tanpa referensi dijadwalkan hapus setelah jeda 24 jam. Aplikasi memvalidasi gambar, bukan keabsahan QRIS atau status pembayaran; gunakan QRIS statis untuk pemakaian ulang dan periksa penerima/nominal saat membayar.
 
+Batas 2 MiB berlaku pada file unggahan dan PNG yang disimpan. PNG palet diproses dengan keluaran palet agar tidak membengkak menjadi RGB. Jika hasil PNG masih melebihi 2 MiB, server mengecilkan dimensi secara bertahap dari gambar asli, dengan rasio tetap dan sisi terpanjang maksimal 2400 piksel. Metadata privat dibuang dan transparansi memakai latar putih. Batas decode tetap 16 megapiksel; file kecil dengan resolusi lebih besar ditolak sebagai `QRIS_RESOLUTION_TOO_LARGE`. File animasi, format isi yang tidak didukung, dan gambar rusak mempunyai pesan terpisah. Kegagalan validasi upload juga dicatat di log `qris_request_failed` dengan kode dan `requestId`, tanpa isi gambar atau pesan mentah decoder.
+
 Secara default QRIS memakai bucket dari `FIREBASE_STORAGE_BUCKET` dan tidak bergantung pada `RECEIPT_PHOTOS_ENABLED`. Konfigurasi server opsional:
 
 ```dotenv
@@ -77,16 +79,16 @@ RECEIPT_DEPLOYMENT_READS_PER_MINUTE=600
 
 Gunakan nama bucket tanpa `gs://`. Secret tidak boleh masuk `.env.example`, log, atau variabel `NEXT_PUBLIC_*`.
 
-8. Pasang scheduler eksternal setiap 15 menit untuk **POST** `/api/internal/receipt-cleanup` dengan `Authorization: Bearer <RECEIPT_CLEANUP_SECRET>`. Gunakan penyedia yang mendukung POST serta secret header, misalnya Cloud Scheduler. Jangan menganggap cron GET bawaan Vercel langsung cocok dengan endpoint ini.
+8. Konfigurasi bawaan `vercel.json` menjalankan **GET** `/api/internal/receipt-cleanup` sekali sehari, pukul 20 UTC (sekitar pukul 04–05 Asia/Singapore pada Hobby). Isi `CRON_SECRET` acak minimal 32 karakter pada environment Production lalu deploy; Vercel mengirim secret sebagai bearer token. Jika membutuhkan pembersihan lebih cepat, pasang scheduler eksternal setiap 15 menit untuk **POST** endpoint yang sama dengan `Authorization: Bearer <RECEIPT_CLEANUP_SECRET>`. Kedua kredensial terpisah dan tidak boleh kosong.
 9. Smoke test pada bucket staging: upload → baca owner → tanpa sesi ditolak → opt-in share → revoke → expiry → cleanup → objek benar-benar hilang. Verifikasi IAM dan soft delete melalui console/API. Setelah lulus, aktifkan `RECEIPT_PHOTO_SHARING_ENABLED=true` bila berbagi foto diinginkan.
 
-Menurut [dokumentasi Vercel Cron](https://vercel.com/docs/schedules/cron-jobs/usage-and-pricing) saat implementasi, Hobby hanya mendukung cron sekali sehari. Pilih scheduler/paket sesuai target; repository tidak memaksakan cron per-15-menit ke Hobby.
+Menurut [dokumentasi Vercel Cron](https://vercel.com/docs/schedules/cron-jobs/usage-and-pricing), Hobby hanya mendukung cron sekali sehari. Jadwal bawaan cocok dengan batas tersebut. QRIS yang kehilangan referensi terakhir menunggu 24 jam, lalu dibersihkan pada jadwal berikutnya: pada jadwal harian, file dapat masih aktif sekitar 24–48 jam sejak tidak dipakai lagi. Foto struk yang dihapus kehilangan akses aplikasi segera, sedangkan file menunggu cleanup. Soft delete pada bucket dapat mempertahankan salinan recoverable setelah file aktif dihapus; periksa kebijakan bucket sebelum menjanjikan penghapusan permanen.
 
 ## Cleanup dan rekonsiliasi
 
-Cleanup tetap bekerja saat fitur foto dimatikan. Secret kosong/kurang dari 32 karakter menolak semua request; GET ditolak. Respons memuat `processed`, `deleted`, `failed`, `oldestDueAt`, dan `hasMore`.
+Cleanup tetap bekerja saat fitur foto dimatikan. Secret kosong/kurang dari 32 karakter menolak request. GET hanya menerima `CRON_SECRET`; POST hanya menerima `RECEIPT_CLEANUP_SECRET`. Respons memuat `processed`, `deleted`, `failed`, `oldestDueAt`, dan `hasMore`.
 
-- Satu panggilan mengambil maksimal 50 record jatuh tempo melalui `nextCleanupAt`, bukan scan seluruh koleksi. Jika `hasMore`, orchestrator mengulang dengan batas durasi wajar sampai backlog habis.
+- Satu batch mengambil maksimal 25 record struk dan 25 QRIS jatuh tempo melalui `nextCleanupAt`, bukan scan seluruh koleksi. Kedua jenis diproses bersamaan agar struk tidak menghabiskan waktu QRIS. GET cron mengulang maksimal 10 batch dalam budget 25 detik; POST tetap satu batch. Jika `hasMore`, orchestrator eksternal mengulang dengan batas durasi wajar atau pekerjaan harian berikutnya melanjutkan.
 - Reservation dibuat sebelum upload objek. Reservation menggantung 15 menit, kegagalan upload, foto diganti/dihapus, serta bill dihapus dijadwalkan cleanup.
 - Status ditutup dahulu, lalu objek dihapus dengan generation precondition. Not-found dianggap berhasil. Kegagalan mempertahankan metadata dan kuota aset; retry backoff 1 menit hingga maksimal 1 jam.
 - Setelah objek terkonfirmasi hilang, record menjadi tombstone dengan TTL tujuh hari. Metadata yang masih bertanggung jawab atas bytes tidak diberi TTL. Jangan menghapus metadata pending lebih dulu.
@@ -94,7 +96,7 @@ Cleanup tetap bekerja saat fitur foto dimatikan. Secret kosong/kurang dari 32 ka
 - Rekonsiliasi harian: POST endpoint yang sama dengan `?reconcile=1`. Satu halaman maksimal 100 objek pada prefix `receipts/`. Ulangi dengan `?reconcile=1&cursor=<url-encoded-cursor>` sampai respons `cursor` null. Hanya objek berumur lebih dari 25 jam tanpa record aktif yang dibersihkan.
 - Jangan listing bucket pada request pengguna. Tagihan yang dihapus selama upload tidak dibuat ulang oleh proses foto.
 
-Pantau log terstruktur `receipt_cleanup` dan isi respons. Pasang alarm eksternal pada HTTP gagal, `failed > 0`, backlog berulang, serta waktu jatuh tempo tertua lewat satu jam. Satu jam adalah target operasional normal, bukan jaminan platform. HTTP 200 bisa berisi kegagalan sebagian batch; monitoring perlu memeriksa `failed` juga.
+Pantau log terstruktur `receipt_cleanup`, `image_cleanup`, dan isi respons. Pasang alarm eksternal pada HTTP gagal, `failed > 0`, serta backlog berulang. Target satu jam setelah jatuh tempo memerlukan scheduler eksternal yang lebih sering; jadwal harian Hobby tidak memenuhi target itu. HTTP 200 bisa berisi kegagalan sebagian batch; monitoring perlu memeriksa `failed` juga. Retry backoff tidak menjalankan worker sendiri: percobaan berikutnya terjadi saat scheduler memanggil endpoint lagi.
 
 ## Akses dan biaya
 

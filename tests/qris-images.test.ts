@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
+import { indexedQrisFixture } from "./helpers/qris-images";
+import { MAX_QRIS_BYTES } from "../src/domain/qris";
 const { documents, firestore } = await vi.hoisted(async () => {
   const { createFirestoreFake } = await import("./helpers/firestore");
   return createFirestoreFake();
@@ -67,6 +69,7 @@ import {
 } from "../src/server/store/repository";
 import { GET as ownerGet } from "../src/app/api/payments/qris/[id]/route";
 import { POST as uploadPost } from "../src/app/api/payments/qris/route";
+import { GET as scheduledCleanup } from "../src/app/api/internal/receipt-cleanup/route";
 import type { PaymentProfileInput } from "../src/domain/payment-profile";
 import type { QrisImageRecord } from "../src/domain/qris";
 const DAY = 86400000;
@@ -139,6 +142,51 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 describe("uploaded QRIS images", () => {
+  it("cleans a removed profile image through the authenticated cron after its grace period", async () => {
+    vi.stubEnv("CRON_SECRET", "test-only-cron-secret-at-least-32-characters");
+    const image = await uploadQrisImage("alice", bytes);
+    const saved = await savePaymentProfile("alice", 0, profile(image.id));
+    vi.setSystemTime(Date.now() + 1000);
+    await savePaymentProfile("alice", saved.revision, { methods: [], defaultMethodId: null });
+    const run = () => scheduledCleanup(new Request("http://localhost/api/internal/receipt-cleanup", {
+      headers: { authorization: `Bearer ${process.env.CRON_SECRET}` },
+    }));
+    expect((await (await run()).json()).data.qris.deleted).toBe(0);
+    expect(assets.files.has(image.id)).toBe(true);
+    vi.setSystemTime(Date.now() + DAY);
+    expect((await (await run()).json()).data.qris.deleted).toBe(1);
+    expect(assets.files.has(image.id)).toBe(false);
+    expect(record(image.id).status).toBe("deleted");
+    await expect(readOwnerQrisImage("alice", image.id)).rejects.toMatchObject({ statusCode: 404 });
+    expect((await (await run()).json()).data.qris.deleted).toBe(0);
+  });
+  it("accepts a valid 1.2 MB indexed PNG through multipart upload and serves identical pixels", async () => {
+    const input = await indexedQrisFixture();
+    expect(input.length).toBeGreaterThan(1_000_000);
+    expect(input.length).toBeLessThan(MAX_QRIS_BYTES);
+    const form = new FormData();
+    form.set("image", new File([new Uint8Array(input)], "qris.png", { type: "image/png" }));
+    const response = await uploadPost(new Request("http://localhost:3000/api/payments/qris", {
+      method: "POST",
+      headers: { origin: "http://localhost:3000" },
+      body: form,
+    }));
+    const result = await response.json();
+    expect(result, "A valid image below the upload limit must survive re-encoding").toMatchObject({ ok: true });
+    expect(response.status).toBe(200);
+    const download = await ownerGet(
+      new Request(`http://localhost:3000/api/payments/qris/${result.data.id}`),
+      { params: Promise.resolve({ id: result.data.id }) },
+    );
+    expect(download.status).toBe(200);
+    expect(download.headers.get("content-type")).toBe("image/png");
+    const output = Buffer.from(await download.arrayBuffer());
+    expect(output.length).toBeLessThanOrEqual(MAX_QRIS_BYTES);
+    const outputPixels = await sharp(output).removeAlpha().raw().toBuffer();
+    const inputPixels = await sharp(input).removeAlpha().raw().toBuffer();
+    expect(outputPixels.equals(inputPixels)).toBe(true);
+    expect(record(result.data.id)).toMatchObject({ status: "ready", sizeBytes: output.length });
+  });
   it("enforces the stored asset cap across hours, including older reservations and failed deletions", async () => {
     vi.stubEnv("QRIS_MAX_STORED_PER_USER", "2");
     const one = await uploadQrisImage("alice", bytes);
