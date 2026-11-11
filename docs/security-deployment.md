@@ -2,6 +2,15 @@
 
 Audit repository: 8 November 2026, Asia/Singapore. Ini pemeriksaan kode, dependency, file publikasi, dan build production lokal; bukan sertifikasi keamanan atau penetration test production.
 
+## Pemeliharaan dependency v1.1.3: 11 November 2026
+
+- Next/eslint-config-next 16.4.6, React/React DOM 19.3.1, google-auth-library 11.3.4, Firebase 13.2.0, Lucide 1.71.0, Vitest 5.1.0, dan Tailwind/plugin Turbopack 4.3.5 sudah diuji bersama. Node tetap 24.x dan pnpm tetap 12.10.1.
+- Firebase baru membawa @firebase/firestore 4.19.1. Target override gRPC disesuaikan ke versi tersebut agar tetap memakai 1.14.7; override lain dan patch jwks-rsa dipertahankan. Audit akhir seluruh dependency termasuk development melaporkan 0 advisory.
+- Verifikasi: frozen lockfile offline, 408 tes pada 33 file, typecheck, lint, dan build production lulus. CI juga mendapat langkah typecheck eksplisit.
+- Smoke test browser memakai sandbox dengan data serta penyimpanan sintetis: sesi, upload, scan simulasi, review, pembagian/finalisasi, link anonim dengan foto opt-in, dan penyimpanan profil pembayaran lulus. Review/hasil/pembayaran diperiksa pada lebar 320–1280 piksel tanpa overflow horizontal; tidak ditemukan error/warning pada log browser yang diperiksa.
+- Smoke test runtime production lokal memverifikasi security headers halaman utama dan penolakan anonim 401 dengan private/no-store pada scan, foto owner, dan QRIS. Tidak menguji login Google, Gemini, atau konfigurasi IAM/rules deployment live dalam pemeliharaan ini.
+- Migrasi mayor Gemini SDK, ESLint, dan TypeScript tidak dimasukkan pada putaran ini. TypeScript 7 belum sesuai dengan peer parser/plugin @typescript-eslint yang terpasang (`>=4.8.4 <6.1.0`).
+
 ## Pembaruan alur scan: 11 November 2026
 
 - Endpoint scan memvalidasi signature lengkap PNG, metadata, batas 16 megapiksel, satu frame, dan decode piksel JPEG/PNG/WebP sebelum reservasi kuota atau pemanggilan AI. Gambar rusak, animasi, dan resolusi berlebihan ditolak. Byte asli dipertahankan agar validasi tidak menurunkan keterbacaan struk panjang; batas file tetap 2 MiB.
