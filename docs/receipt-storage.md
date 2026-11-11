@@ -1,4 +1,6 @@
-# Foto struk sementara dan profil pembayaran — v1.1.0
+# Foto struk sementara dan profil pembayaran
+
+Fitur ini diperkenalkan pada **v1.1.0** dan tetap tersedia pada versi aplikasi saat ini.
 
 ## Perilaku aplikasi
 

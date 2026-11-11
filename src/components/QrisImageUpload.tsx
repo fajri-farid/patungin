@@ -39,7 +39,7 @@ export function QrisImageUpload({
       file.size > MAX_QRIS_BYTES ||
       !["image/jpeg", "image/png", "image/webp"].includes(file.type)
     ) {
-      setError("Pilih JPG, PNG, atau WebP maksimal 2 MiB.");
+      setError("Pilih JPG, PNG, atau WebP maksimal 2 MB.");
       return;
     }
     guard.current = true;
@@ -113,7 +113,7 @@ export function QrisImageUpload({
                 Menyimpan gambar QRIS…
               </p>
               <p className="text-xs text-[#4A5B7C]">
-                Mengoptimalkan ketajaman kode QR agar mudah dipindai teman.
+                Tunggu sampai gambar tersimpan sebelum menutup halaman.
               </p>
             </div>
           </div>
@@ -137,7 +137,7 @@ export function QrisImageUpload({
             Pilih gambar QRIS
           </span>
           <span className="text-xs text-[#4A5B7C]">
-            JPG, PNG, atau WebP · maks. 2 MiB
+            JPG, PNG, atau WebP · maks. 2 MB
           </span>
         </button>
       )}
@@ -189,11 +189,8 @@ export function QrisImageUpload({
       )}
 
       <p className="text-xs text-[#4A5B7C]">
-        Gunakan QRIS statis untuk dipakai ulang. JPG, PNG, atau WebP maksimal 2
-        MiB. Perubahan gambar berlaku setelah tujuan pembayaran disimpan.
-        Gambar QRIS tetap tersedia selama masih dipakai profil atau tagihan.
-        Setelah tidak dipakai lagi, gambar menunggu 24 jam sebelum dibersihkan
-        otomatis pada jadwal berikutnya.
+        Pilih QRIS yang bisa dipakai berulang kali. Simpan tujuan pembayaran
+        setelah mengganti gambar.
       </p>
     </div>
   );

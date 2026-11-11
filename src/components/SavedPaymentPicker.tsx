@@ -84,7 +84,7 @@ export function SavedPaymentPicker({
           rel="noopener noreferrer"
           className="inline-flex min-h-11 items-center gap-1 px-2 text-xs font-semibold text-[#4A5B7C] hover:text-[#2855D9]"
         >
-          <span>Kelola rekening</span>
+          <span>Kelola tujuan pembayaran</span>
           <ExternalLink size={13} aria-hidden="true" />
         </Link>
       </div>
@@ -92,8 +92,7 @@ export function SavedPaymentPicker({
       {open && (
         <div className="space-y-3 border-t border-[#D8E2F2] pt-3">
           <p className="text-xs text-[#4A5B7C]">
-            Pastikan tujuan pembayaran sesuai dengan orang yang menalangi
-            tagihan. Pilihan ini tidak menimpa isian manualmu.
+            Pilih rekening, e-wallet, atau QRIS milik orang yang membayar dulu. Pilihanmu akan ditambahkan ke tagihan ini.
           </p>
 
           {loadingList && <SavedMethodsInlineSkeleton />}
@@ -121,8 +120,7 @@ export function SavedPaymentPicker({
 
           {!loadingList && profile?.methods.length === 0 && (
             <div className="rounded-xl border border-dashed border-[#D8E2F2] bg-white p-3.5 text-center text-xs text-[#4A5B7C]">
-              Belum ada rekening tersimpan. Isi manual di bawah atau tambahkan
-              melalui menu{" "}
+              Belum ada tujuan pembayaran tersimpan. Isi di bawah atau buka{" "}
               <Link
                 href="/settings/payments"
                 target="_blank"
@@ -183,13 +181,13 @@ export function SavedPaymentPicker({
                           {isDefault && (
                             <span className="inline-flex items-center gap-1 rounded-full bg-[#E6EDFF] px-2 py-0.5 text-[11px] font-bold text-[#2855D9]">
                               <Star size={11} aria-hidden="true" />
-                              Rekomendasi
+                              Utama
                             </span>
                           )}
                         </span>
                         <span className="block text-xs text-[#4A5B7C]">
                           {method.method === "qris" ? (
-                            "QRIS dengan gambar tersimpan"
+                            "QRIS tersimpan"
                           ) : (
                             <>
                               {method.bankOrWalletName} ·{" "}
@@ -241,7 +239,7 @@ export function SavedPaymentPicker({
               {pending && !loadingList && (
                 <Loader2 size={14} className={ui.spinner} aria-hidden="true" />
               )}
-              Gunakan pilihan{selected.length > 0 ? ` (${selected.length})` : ""}
+              Tambahkan ke tagihan{selected.length > 0 ? ` (${selected.length})` : ""}
             </button>
             <button
               type="button"

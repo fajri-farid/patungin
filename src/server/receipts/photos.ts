@@ -39,7 +39,7 @@ function assertEnabled() {
     throw new AppServiceError(
       503,
       "PHOTOS_DISABLED",
-      "Penyimpanan foto sementara belum tersedia.",
+      "Foto struk belum bisa disimpan.",
     );
 }
 function assertDraft(
@@ -101,14 +101,14 @@ export async function uploadReceiptPhoto(params: {
     throw new AppServiceError(
       422,
       "INVALID_UPLOAD",
-      "Permintaan simpan foto tidak valid.",
+      "Foto belum bisa disimpan. Pilih ulang foto dan coba lagi.",
     );
   }
   if (!bytes.length || bytes.length > MAX_RECEIPT_BYTES)
     throw new AppServiceError(
       422,
       "IMAGE_TOO_LARGE",
-      "Foto maksimal 2 MiB setelah optimasi.",
+      "Foto masih terlalu besar. Potong bagian di luar struk atau pilih foto lain.",
     );
   const imageHash = crypto.createHash("sha256").update(bytes).digest("hex");
   const id = `photo_${crypto
@@ -149,12 +149,12 @@ export async function uploadReceiptPhoto(params: {
         throw new AppServiceError(
           409,
           "UPLOAD_RETRY_REQUIRED",
-          "Percobaan sebelumnya gagal. Mulai percobaan simpan baru.",
+          "Foto belum tersimpan. Pilih ulang foto dan coba lagi.",
         );
       throw new AppServiceError(
         409,
         "UPLOAD_IN_PROGRESS",
-        "Upload ini sudah diproses. Muat ulang sebelum mencoba lagi.",
+        "Foto sudah diproses. Muat ulang sebelum mencoba lagi.",
       );
     }
     assertDraft(bill, ownerUid, expectedRevision);
@@ -176,7 +176,7 @@ export async function uploadReceiptPhoto(params: {
       throw new AppServiceError(
         429,
         "PHOTO_LIMIT",
-        "Batas simpan foto sementara tercapai. Tunggu lalu coba lagi.",
+        "Terlalu banyak foto yang sedang diproses. Tunggu sebentar lalu coba lagi.",
       );
     }
     const photo: ReceiptPhotoRecord = {
@@ -258,7 +258,7 @@ export async function uploadReceiptPhoto(params: {
         throw new AppServiceError(
           409,
           "UPLOAD_EXPIRED",
-          "Upload sudah berakhir. Pilih ulang foto.",
+          "Foto belum tersimpan. Pilih ulang foto.",
         );
       const next = {
         ...current,
@@ -378,7 +378,7 @@ async function readAvailable(
     throw new AppServiceError(
       404,
       "PHOTO_UNAVAILABLE",
-      "Foto struk sudah kedaluwarsa atau tidak tersedia.",
+      "Foto struk sudah tidak tersedia.",
     );
   }
   const bytes = await readPhotoBytes(photo);
@@ -387,7 +387,7 @@ async function readAvailable(
     throw new AppServiceError(
       404,
       "PHOTO_UNAVAILABLE",
-      "Foto sudah kedaluwarsa.",
+      "Foto sudah tidak tersedia.",
     );
   return bytes;
 }

@@ -30,6 +30,9 @@ export function serializeCanonicalFinancialInput(input: FinancialHashPayload): s
       lineAmount: item.lineAmount ?? null,
       reviewConfirmed: Boolean(item.reviewConfirmed),
       unitMismatchConfirmed: Boolean(item.unitMismatchConfirmed),
+      ...(item.quantityStatus ? { quantityStatus: item.quantityStatus } : {}),
+      ...(item.includedModifiers?.length ? { includedModifiers: item.includedModifiers } : {}),
+      ...(item.baseUnitPrice != null ? { baseUnitPrice: item.baseUnitPrice } : {}),
     }));
 
   const canonicalAdjustments = [...input.adjustments]
@@ -48,6 +51,9 @@ export function serializeCanonicalFinancialInput(input: FinancialHashPayload): s
       dependsOnAdjustmentIds: [...(adj.dependsOnAdjustmentIds ?? [])].sort(),
       rateBps: adj.rateBps ?? null,
       reviewConfirmed: Boolean(adj.reviewConfirmed),
+      ...(adj.directionNeedsReview ? { directionNeedsReview: true } : {}),
+      ...(adj.basisNeedsReview ? { basisNeedsReview: true } : {}),
+      ...(adj.discountNeedsReview ? { discountNeedsReview: true } : {}),
     }));
 
   return JSON.stringify({

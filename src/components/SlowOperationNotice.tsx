@@ -10,6 +10,6 @@ export function SlowOperationNotice() {
     return () => clearTimeout(timer);
   }, []);
   return <p role="status" className="text-xs text-[#4A5B7C]">
-    {slow ? "Proses lebih lama dari biasanya. Tetap di halaman ini; jangan kirim ulang dulu." : ""}
+    {slow ? "Sedikit lebih lama dari biasanya. Tunggu di halaman ini sebelum mencoba lagi." : ""}
   </p>;
 }

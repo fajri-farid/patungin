@@ -171,7 +171,7 @@ export function NewBillClient({
         rememberReceiptPreview(draft.id, processed.previewDataUrl);
         if (receiptsEnabled) {
           setPhase("upload");
-          setStage("Menyimpan foto selama 24 jam…");
+          setStage("Menyimpan foto…");
           try {
             const saved = await uploadReceiptFile(
               draft,
@@ -217,7 +217,7 @@ export function NewBillClient({
           // A lost response does not mean OCR failed. Do not spend quota on another attempt.
           setScanNeedsReview(true);
           throw new ReceiptInputError(
-            "Hasil scan belum bisa dipastikan. Buka draft untuk memeriksa hasilnya; scan tidak dikirim ulang agar kuotamu aman.",
+            "Hasil scan belum muncul. Buka tagihan untuk mengeceknya sebelum scan lagi.",
           );
         }
         const { response, result: data } = scanResponse;
@@ -287,7 +287,7 @@ export function NewBillClient({
               <Sparkles size={15} aria-hidden="true" />
             </span>
             <span className="text-xs font-bold uppercase tracking-wider text-[#4A5B7C]">
-              Kuota Scan Bulan Ini
+              Kuota scan bulan ini
             </span>
           </div>
 
@@ -357,13 +357,13 @@ export function NewBillClient({
               aria-hidden="true"
             />
             <span>
-              Reset tanggal <strong>1, 00.00 WITA</strong>
+              Diperbarui tiap tanggal <strong>1, 00.00 WITA</strong>
             </span>
           </div>
           <div>
             {isQuotaDepleted ? (
               <span className="font-semibold text-[#B42318]">
-                Bebas kuota via Isi manual
+                Isi manual tanpa kuota
               </span>
             ) : isQuotaLow ? (
               <span className="font-medium text-[#9A4A12]">
@@ -388,7 +388,7 @@ export function NewBillClient({
                   ? "Kuota scan bulan ini sudah habis."
                   : "Fitur baca struk sedang tidak tersedia."}
               </strong>{" "}
-              Kamu tetap bisa membuat tagihan tanpa batas dengan opsi{" "}
+              Kamu tetap bisa membuat tagihan dengan memilih{" "}
               <span className="font-bold underline">Isi manual</span> di bawah.
             </div>
           </div>
@@ -424,8 +424,8 @@ export function NewBillClient({
         <ShieldCheck size={15} className="shrink-0 text-[#2855D9]" aria-hidden="true" />
         <span>
           {receiptsEnabled
-            ? "Foto disimpan privat selama 24 jam. Berbagi foto ke teman bersifat opsional."
-            : "Foto dipakai untuk membaca struk. Penyimpanan foto sementara belum tersedia."}
+            ? "Foto bisa dibuka selama 24 jam. Hanya dibagikan jika kamu memilih."
+            : "Foto dipakai untuk membaca struk, tetapi belum bisa disimpan."}
         </span>
       </div>
 
@@ -515,7 +515,7 @@ export function NewBillClient({
                     ) : (
                       <CheckCircle2 size={14} aria-hidden="true" />
                     )}
-                    1. Menyiapkan & merapikan foto
+                    1. Siapkan foto
                   </span>
                   <span className="text-[#7687A6]">
                     {phase === "optimize" ? "Berjalan" : "Selesai"}
@@ -546,14 +546,14 @@ export function NewBillClient({
                       ) : (
                         <span className="inline-block h-3.5 w-3.5 rounded-full border border-[#CBD5E1]" />
                       )}
-                      2. Menyimpan foto referensi 24 jam
+                      2. Simpan foto
                     </span>
                     <span className="text-[#7687A6]">
                       {phase === "upload"
-                        ? "Mengunggah"
+                        ? "Menyimpan"
                         : phase === "scan"
                           ? uploadSkipped
-                            ? "Lanjut lokal"
+                            ? "Belum tersimpan"
                             : "Tersimpan"
                           : "Menunggu"}
                     </span>
@@ -571,10 +571,10 @@ export function NewBillClient({
                     ) : (
                       <span className="inline-block h-3.5 w-3.5 rounded-full border border-[#CBD5E1]" />
                     )}
-                    {receiptsEnabled ? "3." : "2."} Membaca daftar pesanan & harga
+                    {receiptsEnabled ? "3." : "2."} Baca struk
                   </span>
                   <span className="text-[#7687A6]">
-                    {phase === "scan" ? "Mengekstrak" : "Menunggu"}
+                    {phase === "scan" ? "Membaca" : "Menunggu"}
                   </span>
                 </li>
               </ol>
@@ -606,7 +606,7 @@ export function NewBillClient({
             {phase === "manual" && (
               <Loader2 size={17} className={ui.spinner} aria-hidden="true" />
             )}
-            {phase === "manual" ? "Menyiapkan tagihan…" : scanNeedsReview ? "Buka draft dan periksa hasil" : "Isi manual saja"}
+            {phase === "manual" ? "Menyiapkan tagihan…" : scanNeedsReview ? "Buka tagihan" : "Isi manual"}
           </button>
 
           <details className="rounded-xl border border-[#E2EAF6] bg-[#F8FAFF] px-3.5 py-2 text-xs text-[#4A5B7C]">
@@ -616,8 +616,8 @@ export function NewBillClient({
             <p className="pb-1.5 pt-1 leading-relaxed">
               Foto dikirim ke Google Gemini untuk membaca pesanan dan harga.
               {receiptsEnabled
-                ? " Salinan foto disimpan privat selama masa akses 24 jam, lalu dihapus otomatis. Foto hanya ikut link jika kamu memilih."
-                : " Penyimpanan foto online belum tersedia. Salinan referensi hanya tersedia sementara di tab ini."}
+                ? " Hanya kamu yang bisa melihat foto, kecuali kamu memilih membagikannya. Foto bisa dibuka selama 24 jam sejak disimpan, lalu akan dihapus otomatis."
+                : " Foto belum bisa disimpan. Kamu hanya bisa melihatnya sementara di tab ini."}
             </p>
           </details>
         </div>

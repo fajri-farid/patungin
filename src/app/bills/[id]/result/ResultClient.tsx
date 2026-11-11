@@ -370,7 +370,7 @@ export function ResultClient({
   const handleRevokeShareLink = () => {
     if (
       !window.confirm(
-        "Cabut link hasil ini sekarang? Siapa pun yang membuka link lama tidak akan bisa melihat rincian lagi.",
+        "Nonaktifkan link ini? Teman tidak bisa lagi membuka rincian dari link tersebut.",
       )
     ) {
       return;
@@ -379,7 +379,7 @@ export function ResultClient({
     runAction(async () => {
       const res = await revokeShareAction({ billId: bill.id });
       if (!res.ok || !res.data) {
-        setActionError(res.error ?? "Gagal mencabut link.");
+        setActionError(res.error ?? "Link belum bisa dinonaktifkan. Coba lagi.");
         return;
       }
       setBill(res.data);
@@ -391,7 +391,7 @@ export function ResultClient({
   const handleReopenToEdit = () => {
     if (
       !window.confirm(
-        "Membuka kembali tagihan untuk diedit akan mencabut link yang sudah dibagikan. Lanjutkan?",
+        "Ubah tagihan ini? Link yang sudah dibagikan akan dinonaktifkan.",
       )
     ) {
       return;
@@ -403,7 +403,7 @@ export function ResultClient({
         expectedRevision: bill.revision,
       });
       if (!res.ok || !res.data) {
-        setActionError(res.error ?? "Gagal membuka kembali tagihan.");
+        setActionError(res.error ?? "Tagihan belum bisa diubah. Coba lagi.");
         return;
       }
       setBill(res.data);
@@ -926,12 +926,12 @@ export function ResultClient({
               />
               <span className="min-w-0 flex-1 space-y-1">
                 <span className="block text-[#17233B]">
-                  Sertakan foto struk di link berbagi
+                  Bagikan juga foto struk
                 </span>
                 <span className="block text-xs font-normal text-[#4A5B7C]">
                   {photoAvailable
-                    ? "Siapa pun yang memiliki link bisa melihat fotonya sampai masa akses 24 jam sejak unggah berakhir."
-                    : "Simpan foto struk yang masih berlaku di atas jika ingin menyertakannya pada link berbagi."}
+                    ? "Siapa pun yang punya link bisa melihat foto hingga 24 jam sejak foto disimpan."
+                    : "Simpan foto struk di atas agar bisa ikut dibagikan."}
                 </span>
               </span>
             </label>
@@ -941,7 +941,7 @@ export function ResultClient({
           <section className={ui.notice}>
             <p className="text-xs sm:text-sm text-[#4A5B7C]">
               {shareLinksEnabled
-                ? "Hasil dan tujuan pembayaran akan disimpan. Link rincian bisa dibuka teman tanpa login."
+              ? "Simpan hasil agar teman bisa membuka rinciannya tanpa login."
                 : "Simpan hasil dan tujuan pembayaran untuk dibagikan ke teman."}
             </p>
           </section>
@@ -961,10 +961,9 @@ export function ResultClient({
                   Link rincian tagihan
                 </h2>
                 <p className="text-xs text-[#4A5B7C] mt-0.5">
-                  Siapa pun yang punya link bisa melihat rincian pesanan dan
-                  info pembayaran. Link berlaku 7 hari sejak dibuat. Foto hanya
-                  ikut jika kamu memilih, sampai masa akses fotonya berakhir.
-                  Email akun tidak ditampilkan.
+                  Link berlaku 7 hari sejak dibuat. Siapa pun yang punya link bisa
+                  melihat pesanan dan cara bayar. Foto hanya ikut jika dipilih,
+                  dan bisa dibuka hingga 24 jam sejak disimpan.
                 </p>
               </div>
             </div>
@@ -1016,7 +1015,7 @@ export function ResultClient({
                     {copiedLink ? (
                       <>
                         <Check className="w-3.5 h-3.5" aria-hidden="true" />{" "}
-                        Link Tersalin
+                        Link tersalin
                       </>
                     ) : (
                       <>
@@ -1088,7 +1087,7 @@ export function ResultClient({
             photoBusy
               ? "Menunggu foto…"
               : pickerBusy
-                ? "Memuat rekening…"
+                ? "Memuat tujuan pembayaran…"
                 : "Menyimpan…"
           }
           pending={isPending || photoBusy || pickerBusy}

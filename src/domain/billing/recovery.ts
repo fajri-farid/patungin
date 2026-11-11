@@ -1,5 +1,6 @@
 import { isValidIdrInteger, isValidPositiveQuantity } from "./money";
 import type { BillAdjustment, BillItem } from "./types";
+import { needsQuantityReview } from "./receipt-review";
 
 /** A reviewable arithmetic proposal, never a replacement for an observed row total. */
 export function proposeLineAmountRecovery(input: {
@@ -18,11 +19,11 @@ export function proposeLineAmountRecovery(input: {
       continue;
     }
     // Unknown quantities use a temporary 1 in the editor; that is not evidence.
-    if (!isValidPositiveQuantity(item.quantity) || !isValidIdrInteger(item.unitPrice) || /jumlah belum terbaca|isian sementara/i.test(item.ambiguityReason ?? "")) return null;
+    if (!isValidPositiveQuantity(item.quantity) || !isValidIdrInteger(item.unitPrice) || needsQuantityReview(item)) return null;
     const amount = item.quantity * item.unitPrice;
     if (!isValidIdrInteger(amount)) return null;
     recoveredCount++;
-    items.push({ ...item, lineAmount: amount, lineAmountSource: "derived", reviewConfirmed: false,
+    items.push({ ...item, lineAmount: amount, lineAmountSource: "derived", reviewConfirmed: false, receiptIssues: ["PRICE_DERIVED"],
       ambiguityReason: "Total baris dihitung dari harga satuan × jumlah, bukan dibaca langsung. Cocokkan dengan gambar sebelum konfirmasi." });
   }
   const subtotal = items.reduce((sum, i) => sum + BigInt(i.lineAmount!), BigInt(0));
@@ -30,6 +31,7 @@ export function proposeLineAmountRecovery(input: {
   let total = subtotal;
   let discounts = BigInt(0);
   for (const adj of input.adjustments) {
+    if (adj.directionNeedsReview || adj.basisNeedsReview || adj.discountNeedsReview) return null;
     if (!isValidIdrInteger(adj.amount) || adj.amountSource !== "observed") return null;
     if (adj.amount === 0) continue;
     if (adj.mode === "included") {

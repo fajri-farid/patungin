@@ -76,7 +76,7 @@ export function ReceiptPhoto({
     return (
       <div className="flex items-center gap-2.5 rounded-xl border border-[#D8E2F2] bg-[#F4F7FC] px-3.5 py-2.5 text-xs text-[#4A5B7C]">
         <ImageOff size={16} className="shrink-0 text-[#7687A6]" aria-hidden="true" />
-        <span>Penyimpanan foto sementara belum tersedia.</span>
+        <span>Foto struk belum bisa disimpan.</span>
       </div>
     );
   }
@@ -103,7 +103,7 @@ export function ReceiptPhoto({
         )}
         <span>
           {isExpired
-            ? "Foto struk sudah kedaluwarsa. Rincian tagihan tetap tersedia."
+            ? "Foto struk sudah tidak tersedia. Rincian tagihan tetap bisa dibuka."
             : "Belum ada foto struk tersimpan."}
         </span>
       </div>
@@ -130,13 +130,13 @@ export function ReceiptPhoto({
             }`}
           >
             <Clock size={13} aria-hidden="true" />
-            {localOnly ? "Hanya di tab ini" : "Aktif 24 jam"}
+            {localOnly ? "Hanya di tab ini" : "Foto tersimpan"}
           </span>
           <span>
             {localOnly
-              ? "Belum tersimpan online"
+              ? "Belum bisa dibuka di perangkat lain"
               : expiryLabel
-                ? `Sampai ${expiryLabel}`
+                ? `Bisa dibuka sampai ${expiryLabel}`
                 : "Tersedia sementara"}
           </span>
         </div>
@@ -166,7 +166,7 @@ export function ReceiptPhoto({
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#F5CA86] bg-[#FFF8F0] p-3.5 text-xs text-[#9A4A12]">
             <div className="flex items-center gap-2">
               <ImageOff size={17} className="shrink-0" aria-hidden="true" />
-              <span>Foto tidak tersedia atau aksesnya sudah berakhir.</span>
+              <span>Foto sudah tidak tersedia. Rincian tagihan tetap bisa dibuka.</span>
             </div>
             <button
               type="button"
@@ -185,10 +185,10 @@ export function ReceiptPhoto({
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-semibold text-[#4A5B7C]">
                 {isDownloading
-                  ? "Sedang mengunduh foto struk…"
+                  ? "Memuat foto struk…"
                   : zoom
                     ? "Geser gambar untuk melihat rincian angka"
-                    : "Foto referensi struk"}
+                    : "Foto struk"}
               </span>
               <button
                 type="button"
@@ -211,7 +211,7 @@ export function ReceiptPhoto({
             </div>
 
             {isDownloading && (
-              <ReceiptImageSkeleton label="Mengunduh foto struk…" />
+              <ReceiptImageSkeleton label="Memuat foto struk…" />
             )}
 
             <div

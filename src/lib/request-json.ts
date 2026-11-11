@@ -33,8 +33,8 @@ export async function requestJson<T = unknown>(
     return { response, result: result as ApiResult<T> };
   } catch {
     throw new RequestInterruptedError(controller.signal.aborted
-      ? "Waktu tunggu habis. Proses di server mungkin masih berjalan. Periksa status sebelum mencoba lagi."
-      : "Respons belum bisa diterima. Periksa koneksi dan status tersimpan sebelum mencoba lagi.");
+      ? "Proses belum bisa dipastikan. Cek apakah perubahan sudah tersimpan sebelum mencoba lagi."
+      : "Hasil belum diterima. Cek apakah perubahan sudah tersimpan sebelum mencoba lagi.");
   } finally {
     clearTimeout(timer);
   }

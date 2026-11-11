@@ -145,7 +145,7 @@ export function OwnerReceiptPhoto({
           className="flex items-center gap-3 rounded-2xl border border-[#F5CA86] bg-[#FFF8F0] p-3.5 text-xs font-semibold text-[#9A4A12]"
         >
           <Loader2 size={17} className={`${ui.spinner} shrink-0`} aria-hidden="true" />
-          <span>Menghapus foto struk dari tagihan…</span>
+          <span>Menghapus foto…</span>
         </div>
       )}
 
@@ -180,13 +180,13 @@ export function OwnerReceiptPhoto({
             <div className="min-w-0 flex-1 space-y-1">
               <p className="text-sm font-extrabold text-[#17233B]">
                 {phase === "preparing"
-                  ? "Menyiapkan & merapikan gambar…"
-                  : "Menyimpan foto struk (akses 24 jam)…"}
+                  ? "Menyiapkan foto…"
+                  : "Menyimpan foto…"}
               </p>
               <p className="text-xs text-[#4A5B7C]">
                 {phase === "preparing"
-                  ? "Menyesuaikan ukuran gambar agar cepat dibuka."
-                  : "Mengunggah salinan privat. Jangan tutup halaman ini."}
+                  ? "Tunggu sebentar, fotomu sedang disiapkan."
+                  : "Tunggu sampai foto tersimpan sebelum menutup halaman."}
               </p>
               <div className="flex flex-wrap items-center gap-2 pt-0.5 text-[11px] font-bold">
                 <span
@@ -199,7 +199,7 @@ export function OwnerReceiptPhoto({
                   ) : (
                     <Loader2 size={12} className={ui.spinner} aria-hidden="true" />
                   )}
-                  1. Optimasi foto
+                  1. Siapkan foto
                 </span>
                 <span className="text-[#A8BCE5]" aria-hidden="true">
                   ·
@@ -212,7 +212,7 @@ export function OwnerReceiptPhoto({
                   {phase === "uploading" && (
                     <Loader2 size={12} className={ui.spinner} aria-hidden="true" />
                   )}
-                  2. Simpan 24 jam
+                  2. Simpan foto
                 </span>
               </div>
             </div>
@@ -333,7 +333,7 @@ export function OwnerReceiptPhoto({
             onClick={() => forgetReceiptPreview(bill.id)}
           >
             <Trash2 size={14} aria-hidden="true" />
-            Hapus salinan tab ini
+            Hapus foto di tab ini
           </button>
         )}
 
@@ -371,9 +371,8 @@ export function OwnerReceiptPhoto({
 
       {enabled && (
         <p className="text-xs text-[#4A5B7C]">
-          Akses foto berakhir setelah 24 jam atau saat dihapus dari tagihan.
-          File dibersihkan otomatis pada jadwal berikutnya. Mengganti foto
-          referensi tidak menjalankan scan ulang.
+          Foto bisa dibuka selama 24 jam sejak disimpan, lalu akan dihapus otomatis.
+          Mengganti foto tidak mengubah pesanan atau membaca ulang struk.
         </p>
       )}
     </section>

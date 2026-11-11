@@ -64,7 +64,7 @@ export async function POST(
       throw new AppServiceError(
         400,
         "INVALID_FORM",
-        "Data unggahan tidak valid.",
+        "Foto belum bisa dikirim. Pilih ulang foto dan coba lagi.",
       );
     }
     const fileEntry = formData.get("receipt");
@@ -81,13 +81,13 @@ export async function POST(
       throw new AppServiceError(
         400,
         "MISSING_IDEMPOTENCY_KEY",
-        "Identitas permintaan tidak valid.",
+        "Scan belum bisa dimulai. Muat ulang halaman lalu coba lagi.",
       );
     if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1)
       throw new AppServiceError(
         400,
         "INVALID_REVISION",
-        "Revisi draft tidak valid.",
+        "Tagihan belum bisa dibaca. Muat ulang halaman lalu coba lagi.",
       );
     if (!(fileEntry instanceof File))
       throw new AppServiceError(
@@ -99,11 +99,11 @@ export async function POST(
       throw new AppServiceError(
         422,
         "IMAGE_TOO_LARGE",
-        "Ukuran gambar melebihi batas 2 MiB setelah optimasi. Pilih foto lain atau potong bagian penting.",
+        "Foto masih terlalu besar. Potong bagian di luar struk atau pilih foto lain.",
       );
 
     const imageBuffer = Buffer.from(await fileEntry.arrayBuffer());
-    const { mimeType, imageHash } = validateAndInspectImageBytes(imageBuffer);
+    const { mimeType, imageHash } = await validateAndInspectImageBytes(imageBuffer);
     const config = getServerConfig();
     stage = "quota";
     // A transport failure can leave commit status uncertain.
@@ -165,7 +165,7 @@ export async function POST(
         throw new AppServiceError(
           503,
           "PERSISTENCE_FAILED",
-          "Status hasil scan belum dapat disimpan. Periksa draft sebelum mencoba lagi.",
+          "Hasil scan belum tersimpan. Buka tagihan untuk mengeceknya sebelum scan lagi.",
         );
       }
       resultRecorded = true;
@@ -181,7 +181,7 @@ export async function POST(
         : new AppServiceError(
             503,
             "PROVIDER_ERROR",
-            "Pembacaan mengalami gangguan. Anda dapat mengisi secara manual.",
+            "Struk belum bisa dibaca. Kamu tetap bisa isi manual.",
           );
     }
 
@@ -199,7 +199,7 @@ export async function POST(
       throw new AppServiceError(
         503,
         "PERSISTENCE_FAILED",
-        "Hasil scan belum dapat disimpan. Periksa draft sebelum mencoba lagi.",
+        "Hasil scan belum tersimpan. Buka tagihan untuk mengeceknya sebelum scan lagi.",
       );
     }
     return reply({
@@ -240,7 +240,7 @@ export async function POST(
         code: known ? error.code : "INTERNAL_SCAN_ERROR",
         error: known
           ? error.message
-          : "Terjadi gangguan saat membaca struk. Periksa draft atau lanjutkan secara manual.",
+          : "Struk belum bisa dibaca. Buka tagihan untuk mengecek hasilnya atau isi manual.",
       },
       known ? error.statusCode : 500,
     );

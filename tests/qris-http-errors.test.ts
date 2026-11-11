@@ -16,7 +16,7 @@ describe("QRIS storage diagnostics without secret leakage", () => {
     expect(body.code).not.toBe("QRIS_ERROR");
     expect(body.error).not.toContain("Bearer");
   });
-  it("explains missing bucket overrides on upload without returning provider details", async () => {
+  it("gives users a retry action while keeping bucket diagnostics in the error code", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const response = qrisError(
       {
@@ -28,7 +28,8 @@ describe("QRIS storage diagnostics without secret leakage", () => {
     const body = await response.json();
     expect(response.status).toBe(503);
     expect(body.code).toBe("QRIS_BUCKET_NOT_FOUND");
-    expect(body.error).toContain("FIREBASE_QRIS_STORAGE_BUCKET");
+    expect(body.error).toContain("Coba lagi nanti");
+    expect(body.error).not.toMatch(/FIREBASE_|bucket|Storage|service account/i);
     expect(body.requestId).toBe(response.headers.get("x-request-id"));
     expect(JSON.stringify([body, warn.mock.calls])).not.toMatch(
       /SECRET|account@example|wrong-bucket|private-key/,

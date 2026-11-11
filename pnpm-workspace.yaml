@@ -1,4 +1,6 @@
 overrides:
+  # GHSA-474x-hrwr-fgx4: keep the storage client's XML parser on the patched release.
+  "@google-cloud/storage>fast-xml-parser": "5.12.0"
   # Scoped tooling fix for GHSA-g3hv-75wg-m249. Node 24 supports minimatch 11.
   "@typescript-eslint/typescript-estree>minimatch": "11.0.5"
   # Firebase's Node Firestore adapter pins a gRPC version affected by

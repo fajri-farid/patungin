@@ -24,6 +24,11 @@ const entry = (
 const manual =
   "Periksa draft. Pengguna dapat melanjutkan dengan pengisian manual.";
 export const DIAGNOSTICS: Record<string, Diagnostic> = {
+  EXTRACTION_CURRENCY_UNSUPPORTED: entry(
+    "INVALID_EXTRACTION", "attention", "Mata uang struk belum didukung",
+    "Hasil pembacaan menunjukkan mata uang selain rupiah.",
+    "Gunakan struk rupiah. Jangan mengonversi nominal secara otomatis.",
+  ),
   MONTHLY_QUOTA_REACHED: entry(
     "QUOTA_REJECTED",
     "normal",
@@ -282,6 +287,9 @@ for (const code of [
   "IMAGE_TOO_LARGE",
   "HEIC_NOT_SUPPORTED",
   "UNSUPPORTED_IMAGE_FORMAT",
+  "INVALID_IMAGE",
+  "IMAGE_RESOLUTION_TOO_LARGE",
+  "ANIMATED_IMAGE_NOT_SUPPORTED",
   "MISSING_FILE",
   "MISSING_IDEMPOTENCY_KEY",
   "INVALID_REVISION",
@@ -292,6 +300,9 @@ for (const code of [
     IMAGE_TOO_LARGE: "Ukuran gambar melebihi batas",
     HEIC_NOT_SUPPORTED: "Format HEIC belum didukung",
     UNSUPPORTED_IMAGE_FORMAT: "Format gambar tidak didukung",
+    INVALID_IMAGE: "Gambar rusak atau tidak dapat dibaca",
+    IMAGE_RESOLUTION_TOO_LARGE: "Resolusi gambar melebihi batas",
+    ANIMATED_IMAGE_NOT_SUPPORTED: "Gambar bergerak tidak didukung",
     MISSING_FILE: "Foto belum disertakan",
     MISSING_IDEMPOTENCY_KEY: "Identitas permintaan tidak valid",
     INVALID_REVISION: "Revisi draft tidak valid",

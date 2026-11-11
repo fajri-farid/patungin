@@ -114,7 +114,7 @@ export async function selectPaymentMethods(ownerUid: string, ids: string[]) {
       throw new AppServiceError(
         409,
         "PAYMENT_REMOVED",
-        "Rekening sudah berubah/dihapus. Buka ulang pemilih rekening.",
+        "Tujuan pembayaran sudah berubah atau dihapus. Buka ulang daftar yang tersimpan.",
       );
     return paymentSnapshot(method);
   });

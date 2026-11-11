@@ -234,7 +234,7 @@ export function SplitClient({ initialBill }: SplitClientProps) {
     const target = bill.participants.find((p) => p.id === participantId);
     if (
       !window.confirm(
-        `Hapus "${target?.name}" dari daftar peserta? Item yang sebelumnya ditandai untuk ${target?.name} perlu ditinjau ulang.`,
+        `Hapus "${target?.name}" dari daftar peserta? Pesanan yang sebelumnya dipilih untuk ${target?.name} perlu dibagi ulang.`,
       )
     ) {
       return;
@@ -317,7 +317,7 @@ export function SplitClient({ initialBill }: SplitClientProps) {
           Object.values(allocation.unitCounts ?? {}).some((count) => count > 0),
       ) &&
       !window.confirm(
-        "Bagi rata semua ke semua orang? Pembagian yang sudah diatur akan diganti.",
+        "Bagi semua pesanan sama rata ke semua teman? Pembagian sebelumnya akan diganti.",
       )
     )
       return;
@@ -382,7 +382,7 @@ export function SplitClient({ initialBill }: SplitClientProps) {
                   Siapa saja yang ikut? ({bill.participants.length})
                 </h2>
                 <p className="text-xs text-[#4A5B7C]">
-                  Cukup nama panggilan — tidak perlu email atau nomor HP.
+                  Pakai nama panggilan saja.
                 </p>
               </div>
             </div>
@@ -429,7 +429,7 @@ export function SplitClient({ initialBill }: SplitClientProps) {
                     value={newParticipantLabel}
                     onChange={(e) => setNewParticipantLabel(e.target.value)}
                     placeholder="Pembeda nama, mis. Dito kantor"
-                    aria-label="Label pembeda opsional bila nama sama"
+                    aria-label="Pembeda nama (opsional)"
                     className="w-full min-h-[40px] px-3 py-1.5 rounded-xl bg-[#FFF3E6]/60 border border-[#F5CA86] text-xs font-medium text-[#17233B] focus:bg-white focus:border-[#2855D9] focus:outline-none"
                   />
                 )}
@@ -535,7 +535,7 @@ export function SplitClient({ initialBill }: SplitClientProps) {
 
         {/* Bagian 2: Pilih Pemilik Pesanan (Dibungkus dalam Wrapper Utuh & Rapi) */}
         <section
-          aria-label="Daftar item untuk dibagi"
+          aria-label="Daftar pesanan untuk dibagi"
           className={`${ui.panel} space-y-4`}
         >
           {/* Header Bagian 2 + Progress Bar */}
@@ -582,7 +582,7 @@ export function SplitClient({ initialBill }: SplitClientProps) {
                     <>
                       <span>Sudah dibagi</span>
                       <span className="text-[#4A5B7C] font-normal">
-                        ({allocatedCount} dari {bill.items.length} menu selesai)
+                        ({allocatedCount} dari {bill.items.length} pesanan selesai)
                       </span>
                     </>
                   )}
@@ -699,6 +699,7 @@ export function SplitClient({ initialBill }: SplitClientProps) {
                             {item.name}
                           </h3>
                         </div>
+                        {item.includedModifiers?.length ? <p className="mt-1 text-xs text-[#4A5B7C]">Termasuk {item.includedModifiers.join(", ")}</p> : null}
                         <p className="text-[11px] text-[#4A5B7C] mt-1">
                           {alloc?.mode === "shared"
                             ? `Dibagi bersama (${

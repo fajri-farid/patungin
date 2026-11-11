@@ -31,8 +31,7 @@ export function QrisImage({
           <div className="flex items-start gap-2">
             <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
             <p>
-              Gambar QRIS belum bisa dimuat. Coba lagi atau hubungi pembayar
-              tagihan.
+              Gambar QRIS belum bisa dimuat. Coba lagi atau hubungi orang yang membayar dulu.
             </p>
           </div>
           <button

@@ -29,6 +29,7 @@ import {
 } from "@/domain/billing/calculation";
 import { GOLDEN_FIXTURES } from "@/domain/billing/fixtures";
 import { computeFinancialInputHash } from "@/domain/billing/hash";
+import { needsQuantityReview } from "@/domain/billing/receipt-review";
 import { normalizePaymentNote, normalizePaymentMethods } from "@/domain/billing/payment";
 import { isValidIdrInteger, isValidPositiveQuantity } from "@/domain/billing/money";
 import {
@@ -109,6 +110,7 @@ export interface ScanAttemptRecord {
 export interface ExtractedReceiptSuggestion {
   sourceType?: BillDocument["receiptSourceType"];
   printedSubtotal?: number | null;
+  printedDiscountTotal?: number | null;
   displayedQuantity?: number | null;
   merchant: string | null;
   receiptDate: string | null;
@@ -221,7 +223,7 @@ export async function getBillForOwner(
       throw new AppServiceError(
         403,
         "FORBIDDEN_BILL_ACCESS",
-        "Anda tidak memiliki akses ke tagihan ini."
+        "Kamu tidak bisa membuka tagihan ini."
       );
     }
     return structuredClone(bill);
@@ -237,7 +239,7 @@ export async function getBillForOwner(
     throw new AppServiceError(
       403,
       "FORBIDDEN_BILL_ACCESS",
-      "Anda tidak memiliki akses ke tagihan ini."
+      "Kamu tidak bisa membuka tagihan ini."
     );
   }
   return bill;
@@ -357,7 +359,7 @@ export async function saveBillDraft(
     throw new AppServiceError(
       422,
       "PAYLOAD_TOO_LARGE",
-      "Ukuran data tagihan melebihi batas maksimum 256 KiB."
+      "Isi tagihan terlalu banyak. Kurangi pesanan atau catatan, lalu simpan lagi."
     );
   }
 
@@ -369,21 +371,21 @@ export async function saveBillDraft(
       throw new AppServiceError(
         403,
         "FORBIDDEN_BILL_ACCESS",
-        "Anda tidak memiliki akses ke tagihan ini."
+        "Kamu tidak bisa membuka tagihan ini."
       );
     }
     if (current.status === "finalized") {
       throw new AppServiceError(
         409,
         "BILL_ALREADY_FINALIZED",
-        "Tagihan sudah difinalkan. Buka kembali (reopen) tagihan jika ingin mengedit."
+        "Tagihan sudah selesai. Pilih Ubah tagihan untuk mengeditnya."
       );
     }
     if (current.revision !== patch.expectedRevision) {
       throw new AppServiceError(
         409,
         "STALE_REVISION",
-        `Tagihan telah berubah di tab atau perangkat lain. Muat ulang halaman untuk mengambil data terbaru.`
+        `Tagihan berubah di tab atau perangkat lain. Muat ulang untuk melihat perubahan terbaru.`
       );
     }
 
@@ -403,8 +405,11 @@ export async function saveBillDraft(
 
     let nextConfirmedHash = current.confirmedInputHash;
     if (patch.markReviewConfirmed) {
-      if (!updatedItems.length || updatedItems.some((i) => !isValidIdrInteger(i.lineAmount) || !isValidPositiveQuantity(i.quantity)) || !isValidIdrInteger(updatedGrandTotal)) {
-        throw new AppServiceError(422, "INCOMPLETE_REVIEW", "Lengkapi harga, jumlah item, dan total tagihan sebelum mengonfirmasi review.");
+      if (updatedAdjustments.some(adjustment => adjustment.discountNeedsReview)) {
+        throw new AppServiceError(422, "INCOMPLETE_REVIEW", "Pastikan apakah diskon masih dipotong atau sudah masuk harga pesanan sebelum lanjut.");
+      }
+      if (!updatedItems.length || updatedItems.some((i) => !isValidIdrInteger(i.lineAmount) || !isValidPositiveQuantity(i.quantity) || needsQuantityReview(i)) || !isValidIdrInteger(updatedGrandTotal)) {
+        throw new AppServiceError(422, "INCOMPLETE_REVIEW", "Lengkapi harga, jumlah pesanan, dan total struk sebelum lanjut.");
       }
       nextConfirmedHash = latestFinancialHash;
     } else if (
@@ -486,7 +491,7 @@ export async function finalizeBillOnServer(params: {
       throw new AppServiceError(
         403,
         "FORBIDDEN_BILL_ACCESS",
-        "Anda tidak memiliki akses ke tagihan ini."
+        "Kamu tidak bisa membuka tagihan ini."
       );
     }
 
@@ -504,7 +509,7 @@ export async function finalizeBillOnServer(params: {
       throw new AppServiceError(
         409,
         "STALE_REVISION",
-        "Tagihan telah berubah sejak terakhir dimuat. Muat ulang halaman sebelum finalisasi."
+        "Tagihan sudah berubah. Muat ulang sebelum menyimpan hasil."
       );
     }
 
@@ -523,7 +528,7 @@ export async function finalizeBillOnServer(params: {
     if (!calcResult.canFinalize) {
       const firstError =
         calcResult.issues.find((i) => i.severity === "error")?.message ||
-        "Masih ada item atau angka yang belum selesai dikonfirmasi.";
+        "Masih ada pesanan atau harga yang perlu dicek.";
       throw new AppServiceError(422, "FINALIZATION_VALIDATION_FAILED", firstError);
     }
 
@@ -664,7 +669,7 @@ export async function reopenBillToDraft(params: {
       throw new AppServiceError(
         409,
         "STALE_REVISION",
-        "Data tagihan telah diperbarui dari sesi lain. Muat ulang halaman."
+        "Tagihan berubah di tab atau perangkat lain. Muat ulang halaman."
       );
     }
 
@@ -700,7 +705,7 @@ export async function reopenBillToDraft(params: {
       throw new AppServiceError(
         409,
         "STALE_REVISION",
-        "Data tagihan telah diperbarui dari sesi lain. Muat ulang halaman."
+        "Tagihan berubah di tab atau perangkat lain. Muat ulang halaman."
       );
     }
 
@@ -744,7 +749,7 @@ export async function publishBillShareLink(params: {
     throw new AppServiceError(
       403,
       "SHARE_LINKS_DISABLED",
-      "Fitur berbagi link publik belum diaktifkan pada konfigurasi server."
+      "Berbagi lewat link belum tersedia. Kamu tetap bisa menyalin ringkasan."
     );
   }
 
@@ -783,7 +788,7 @@ export async function publishBillShareLink(params: {
       throw new AppServiceError(
         422,
         "BILL_NOT_FINALIZED",
-        "Finalisasi tagihan terlebih dahulu sebelum membuat link."
+        "Simpan hasil pembagian sebelum membuat link."
       );
     }
 
@@ -811,7 +816,7 @@ export async function publishBillShareLink(params: {
       throw new AppServiceError(
         404,
         "SNAPSHOT_NOT_FOUND",
-        "Snapshot finalisasi tidak ditemukan."
+        "Hasil pembagian belum tersedia. Buka tagihan dan simpan hasilnya."
       );
     }
 
@@ -853,14 +858,14 @@ export async function publishBillShareLink(params: {
       throw new AppServiceError(
         422,
         "BILL_NOT_FINALIZED",
-        "Finalisasi tagihan terlebih dahulu sebelum membuat link."
+        "Simpan hasil pembagian sebelum membuat link."
       );
     }
 
     let snapshot = bill.finalResult;
     if (!snapshot) {
       const finSnap = await tx.get(billRef.collection("finalizations").doc(bill.currentFinalizationId));
-      if (!finSnap.exists) throw new AppServiceError(404, "SNAPSHOT_NOT_FOUND", "Hasil finalisasi tidak ditemukan.");
+      if (!finSnap.exists) throw new AppServiceError(404, "SNAPSHOT_NOT_FOUND", "Hasil pembagian belum tersedia. Buka tagihan dan simpan hasilnya.");
       snapshot = finSnap.data() as FinalizationSnapshot;
     }
 
@@ -1097,10 +1102,10 @@ export async function resolvePublicShareToken(
 function assertScannableBill(bill: BillDocument, expectedRevision: number): void {
   if (bill.receiptPhotoUploadId) throw new AppServiceError(409, "PHOTO_UPLOAD_IN_PROGRESS", "Foto masih disimpan. Tunggu sebelum membaca struk.");
   if (bill.status !== "draft") {
-    throw new AppServiceError(409, "BILL_FINALIZED", "Buka kembali tagihan sebagai draft sebelum membaca struk baru.");
+    throw new AppServiceError(409, "BILL_FINALIZED", "Pilih Ubah tagihan sebelum membaca struk baru.");
   }
   if (bill.revision !== expectedRevision) {
-    throw new AppServiceError(409, "REVISION_CONFLICT", "Tagihan telah berubah. Muat ulang draft sebelum membaca struk.");
+    throw new AppServiceError(409, "REVISION_CONFLICT", "Tagihan sudah berubah. Muat ulang sebelum membaca struk.");
   }
 }
 
@@ -1151,7 +1156,7 @@ export async function reserveScanAttempt(params: {
     throw new AppServiceError(
       503,
       "SCAN_DISABLED",
-      "Fitur baca struk otomatis sedang dinonaktifkan pada server. Silakan gunakan input manual."
+      "Baca struk sedang tidak tersedia. Kamu tetap bisa isi manual."
     );
   }
 
@@ -1200,7 +1205,7 @@ export async function reserveScanAttempt(params: {
       throw new AppServiceError(
         429,
         "BILL_ATTEMPT_LIMIT_REACHED",
-        `Batas maksimum ${config.limits.maxAttemptsPerBill}x percobaan scan untuk tagihan ini telah tercapai. Silakan edit manual.`
+        `Batas ${config.limits.maxAttemptsPerBill} kali scan untuk tagihan ini sudah tercapai. Kamu tetap bisa mengedit pesanan.`
       );
     }
 
@@ -1344,7 +1349,7 @@ export async function reserveScanAttempt(params: {
         .limit(config.limits.maxAttemptsPerBill)
     )).size;
     if (billAttemptCount >= config.limits.maxAttemptsPerBill) {
-      throw new AppServiceError(429, "BILL_ATTEMPT_LIMIT_REACHED", `Batas maksimum ${config.limits.maxAttemptsPerBill}x percobaan scan untuk tagihan ini telah tercapai. Silakan edit manual.`);
+      throw new AppServiceError(429, "BILL_ATTEMPT_LIMIT_REACHED", `Batas ${config.limits.maxAttemptsPerBill} kali scan untuk tagihan ini sudah tercapai. Kamu tetap bisa mengedit pesanan.`);
     }
 
     const usage: UsageBucketRecord = usageSnap.exists
@@ -1524,6 +1529,7 @@ export async function completeScanAttempt(params: {
         adjustments: ext.adjustments,
         allocations: newAllocations,
         confirmedGrandTotal: ext.printedGrandTotal,
+        observedGrandTotal: ext.printedGrandTotal,
         receiptSourceType: ext.sourceType ?? "printed_receipt",
         extractionWarnings: ext.warnings,
         printedSubtotal: ext.printedSubtotal ?? null,
@@ -1631,6 +1637,7 @@ export async function completeScanAttempt(params: {
           adjustments: ext.adjustments,
           allocations: newAllocations,
           confirmedGrandTotal: ext.printedGrandTotal,
+          observedGrandTotal: ext.printedGrandTotal,
           receiptSourceType: ext.sourceType ?? "printed_receipt",
           extractionWarnings: ext.warnings,
           printedSubtotal: ext.printedSubtotal ?? null,

@@ -59,7 +59,7 @@ export function validatePaymentProfile(
       )
     ) {
       throw new Error(
-        "Tujuan pembayaran tidak valid. Periksa label dan jenis pembayaran.",
+        "Periksa nama pengingat dan jenis pembayaran, lalu simpan lagi.",
       );
     }
     ids.add(raw.id);
@@ -75,7 +75,7 @@ export function validatePaymentProfile(
     };
   });
   if (input.defaultMethodId !== null && !ids.has(input.defaultMethodId))
-    throw new Error("Pilih tujuan default yang masih tersimpan.");
+    throw new Error("Pilih tujuan pembayaran utama dari daftar yang tersimpan.");
   return { methods, defaultMethodId: input.defaultMethodId };
 }
 

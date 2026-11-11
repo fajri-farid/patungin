@@ -13,7 +13,6 @@ import {
   Percent,
   Plus,
   ReceiptText,
-  Sparkles,
   Store,
   Trash2,
 } from "lucide-react";
@@ -24,6 +23,9 @@ import ui from "@/components/product/product.module.css";
 import { billingIssueMessage } from "@/components/product/billing-feedback";
 import { formatRupiah, isValidIdrInteger } from "@/domain/billing/money";
 import { proposeLineAmountRecovery } from "@/domain/billing/recovery";
+import { hasUnitPriceMismatch, mergeReceiptItem, needsQuantityReview, receiptAdjustmentLabel, receiptItemFeedback, receiptWarningMessages } from "@/domain/billing/receipt-review";
+import { ReceiptItemNotice } from "@/components/ReceiptItemNotice";
+import { DiscountTreatmentNotice } from "@/components/DiscountTreatmentNotice";
 import type {
   AdjustmentKind,
   BillAdjustment,
@@ -89,7 +91,6 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
         "REVIEW_HASH_STALE",
         "ITEM_UNCONFIRMED",
         "ADJUSTMENT_UNCONFIRMED",
-        "ADJUSTMENT_SCOPE_UNCONFIRMED",
         "CONSERVATION_MISMATCH",
       ].includes(i.code),
   );
@@ -100,6 +101,19 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
         !isValidIdrInteger(adj.amount) && adj.amountSource === "observed",
     );
   const lineRecovery = proposeLineAmountRecovery({ ...bill });
+  const scanWarnings = receiptWarningMessages(bill.extractionWarnings ?? []);
+
+  const handleMergeItem = (childId: string, parentId: string) => {
+    const parent = bill.items.find(item => item.id === parentId);
+    const child = bill.items.find(item => item.id === childId);
+    if (!parent || !child || !window.confirm(`Gabungkan “${child.name}” ke “${parent.name}”? Total tetap ${formatRupiah(parent.lineAmount)}. Pastikan harga ini sudah termasuk tambahan tersebut.`)) return;
+    const merged = mergeReceiptItem(bill, childId, parentId);
+    if (merged === bill) {
+      setActionError("Pesanan ini sudah dibagi ke teman. Kosongkan pembagiannya sebelum menggabungkan.");
+      return;
+    }
+    updateBillState(() => merged);
+  };
 
   const handleAddItem = () => {
     const nextOrder =
@@ -219,24 +233,21 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
         reviewConfirmed: true,
       };
     } else {
-      const diff =
-        bill.confirmedGrandTotal !== null
-          ? bill.confirmedGrandTotal - calc.computedGrandTotal
-          : 0;
       newAdj = {
         id,
         allocationOrder: nextOrder,
         name: "Pembulatan struk",
         kind: "rounding",
-        amount: Math.abs(diff),
-        sign: diff < 0 ? "negative" : "positive",
+        amount: null,
+        sign: "positive",
+        directionNeedsReview: true,
         amountSource: "observed",
         mode: "added",
         basis: "net",
         eligibleItemIds: allItemIds,
         scopeConfirmed: true,
         reviewConfirmed: true,
-        reason: "Penyesuaian pembulatan pada struk",
+        reason: "",
       };
     }
 
@@ -250,6 +261,7 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
     if (
       proceedPending ||
       hasMissingAmounts ||
+      reviewIssues.some(issue => issue.severity === "error") ||
       bill.items.some((item) => !item.name.trim())
     )
       return;
@@ -265,7 +277,7 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
         adjustments: current.adjustments.map((adjustment) => ({
           ...adjustment,
           reviewConfirmed: true,
-          scopeConfirmed: true,
+          scopeConfirmed: adjustment.scopeConfirmed,
         })),
       }));
     }
@@ -276,7 +288,7 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
   const handleReopenBill = async () => {
     if (
       !window.confirm(
-        "Membuka kembali tagihan untuk diedit akan mencabut link hasil yang lama. Lanjutkan?",
+        "Ubah tagihan ini? Link yang sudah dibagikan akan dinonaktifkan.",
       )
     ) {
       return;
@@ -317,7 +329,7 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
 
       <main id="bill-content" tabIndex={-1} className={ui.main}>
         <StepIntro activeStep="review" />
-        <section className={`${ui.panel} space-y-3`}>
+        <section id="receipt-photo-reference" className={`${ui.panel} space-y-3 scroll-mt-4`}>
           <div className="flex items-center gap-2 pb-2.5 border-b border-[#D8E2F2]">
             <span className="w-7 h-7 rounded-lg bg-[#E6EDFF] text-[#2855D9] flex items-center justify-center shrink-0">
               <ImageIcon className="w-4 h-4" aria-hidden="true" />
@@ -331,8 +343,7 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
             >
               <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
               <span>
-                Foto belum tersimpan untuk perangkat lain. Pilih ulang foto di
-                sini tanpa perlu scan ulang.
+                Foto belum tersimpan. Pilih ulang foto agar bisa dibuka di perangkat lain. Pesanan tidak perlu dibaca ulang.
               </span>
             </div>
           )}
@@ -355,23 +366,20 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
             role="alert"
             className="p-4 rounded-3xl bg-[#FFF3E6] border border-[#F5CA86] text-xs text-[#9A4A12] space-y-3 shadow-2xs"
           >
-            <p className="font-bold text-sm">Harga per baris belum lengkap</p>
+            <p className="font-bold text-sm">Ada harga yang belum diisi</p>
             <p className="leading-relaxed">
               {isValidIdrInteger(bill.confirmedGrandTotal)
-                ? `Total pada gambar terbaca ${formatRupiah(
+                ? `Total di struk ${formatRupiah(
                     bill.confirmedGrandTotal,
-                  )}, tetapi rincian belum bisa dijumlahkan lengkap.`
+                  )}, tetapi ada harga pesanan yang belum diisi.`
                 : "Sebagian harga belum terbaca. Lengkapi harga pesanan sebelum melanjutkan."}
             </p>
             {lineRecovery && !isLockedFinal && (
               <>
                 <p className="leading-relaxed">
-                  {lineRecovery.recoveredCount} total baris bisa dihitung dari
-                  harga satuan × jumlah. Subtotalnya{" "}
-                  {formatRupiah(lineRecovery.subtotal)} dan total setelah
-                  pajak/biaya {formatRupiah(lineRecovery.grandTotal)}, cocok
-                  dengan total pada gambar. Tetap cocokkan tiap baris dengan
-                  foto.
+                  {lineRecovery.recoveredCount} harga pesanan bisa dihitung dari
+                  harga satuan × jumlah. Totalnya {formatRupiah(lineRecovery.grandTotal)}{" "}
+                  cocok dengan struk. Cek tiap pesanan sebelum memakai hasil hitungan.
                 </p>
                 <button
                   type="button"
@@ -397,18 +405,17 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
           </aside>
         )}
 
-        {!!bill.extractionWarnings?.length && (
+        {scanWarnings.length > 0 && (
           <aside
             className="p-4 rounded-3xl bg-[#FFF8E7] border border-[#E8CB83] text-xs text-[#594314] space-y-2 shadow-2xs"
-            aria-label="Catatan pembacaan gambar"
+            aria-label="Catatan hasil scan"
           >
-            <p className="font-bold text-sm">Catatan dari pembacaan gambar</p>
+            <p className="font-bold text-sm">Catatan hasil scan</p>
             <p>
-              Cocokkan dengan foto, lalu koreksi rincian di bawah. Catatan ini
-              berasal dari scan awal.
+              Catatan ini dari scan awal. Cek foto struk dan perbaiki pesanan jika perlu.
             </p>
             <ul className="list-disc pl-4 space-y-1">
-              {bill.extractionWarnings.map((warning, index) => (
+              {scanWarnings.map((warning, index) => (
                 <li key={index}>{warning}</li>
               ))}
             </ul>
@@ -533,8 +540,7 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
                   Pesanan ({bill.items.length})
                 </h2>
                 <p className="text-xs text-[#4A5B7C]">
-                  Isi atau koreksi nama, jumlah porsi, dan total harga tiap
-                  pesanan.
+                  Cek nama, jumlah, dan total harga tiap pesanan.
                 </p>
               </div>
             </div>
@@ -543,17 +549,14 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
           <div className="space-y-3">
             {bill.items.map((item, idx) => {
               const isExpanded = Boolean(expandedItemDetails[item.id]);
-              const hasUnitMismatch =
-                item.unitPrice !== null &&
-                item.unitPrice !== undefined &&
-                item.lineAmount !== null &&
-                item.unitPrice * item.quantity !== item.lineAmount;
+              const hasUnitMismatch = hasUnitPriceMismatch(item);
+              const itemFeedback = receiptItemFeedback(item);
 
               return (
                 <div
                   key={item.id}
                   className={`rounded-2xl border p-3.5 space-y-3 transition-colors focus-within:border-[#9DC0FB] focus-within:bg-white ${
-                    item.ambiguityReason
+                    itemFeedback.length > 0
                       ? "bg-[#FFF3E6]/60 border-[#F5CA86]"
                       : "bg-[#F4F7FC] border-[#D8E2F2]"
                   }`}
@@ -565,7 +568,7 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
                         className="w-3 h-3 text-[#2855D9]"
                         aria-hidden="true"
                       />
-                      Menu #{idx + 1}
+                      Pesanan #{idx + 1}
                     </span>
 
                     <button
@@ -580,42 +583,18 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
                     </button>
                   </div>
 
-                  {/* Badge Ambigu / Perlu Dicek */}
-                  {item.ambiguityReason && (
-                    <div className="flex items-center justify-between gap-2 bg-[#FFF3E6] border border-[#F5CA86] rounded-xl px-3 py-2">
-                      <span className="text-[11px] font-bold text-[#9A4A12] inline-flex items-center gap-1.5">
-                        <AlertTriangle
-                          className="w-3.5 h-3.5 shrink-0"
-                          aria-hidden="true"
-                        />
-                        {item.ambiguityReason
-                          ? `Perlu dicek: ${item.ambiguityReason}`
-                          : "Perlu dicek kebenaran angkanya"}
-                      </span>
-                      {!isLockedFinal && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            updateBillState((prev) => ({
-                              ...prev,
-                              items: prev.items.map((it) =>
-                                it.id === item.id
-                                  ? {
-                                      ...it,
-                                      reviewConfirmed: true,
-                                      ambiguityReason: null,
-                                    }
-                                  : it,
-                              ),
-                            }))
-                          }
-                          className="px-2.5 py-1 rounded-lg bg-[#146346] text-white text-[11px] font-bold inline-flex items-center gap-1 shrink-0 cursor-pointer"
-                        >
-                          <Check className="w-3 h-3" aria-hidden="true" />
-                          Sudah benar
-                        </button>
-                      )}
-                    </div>
+                  <ReceiptItemNotice
+                    item={item}
+                    items={bill.items}
+                    locked={isLockedFinal}
+                    onChange={(updated) => updateBillState(prev => ({ ...prev, items: prev.items.map(it => it.id === item.id ? updated : it) }))}
+                    onMerge={(parentId) => handleMergeItem(item.id, parentId)}
+                  />
+                  {item.includedModifiers?.length ? (
+                    <p className="text-xs text-[#4A5B7C]">Sudah termasuk: {item.includedModifiers.join(", ")}</p>
+                  ) : null}
+                  {item.baseUnitPrice != null && (
+                    <p className="text-xs text-[#4A5B7C]">Harga dasar di struk: {formatRupiah(item.baseUnitPrice)}. Totalnya sudah termasuk tambahan.</p>
                   )}
 
                   {/* Baris 1: Input Nama Menu Full-Width */}
@@ -670,6 +649,8 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
                         max={999}
                         disabled={isLockedFinal}
                         value={item.quantity}
+                        aria-invalid={needsQuantityReview(item)}
+                        aria-describedby={itemFeedback.length ? `item-review-${item.id}` : undefined}
                         onChange={(e) => {
                           const qty = Math.max(
                             1,
@@ -682,6 +663,8 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
                                 ? {
                                     ...it,
                                     quantity: qty,
+                                    quantityStatus: "confirmed",
+                                    unitMismatchConfirmed: false,
                                     reviewConfirmed: true,
                                   }
                                 : it,
@@ -696,6 +679,7 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
                       <MoneyInput
                         id={`item-line-${item.id}`}
                         label="Total harga"
+                        describedBy={itemFeedback.length ? `item-review-${item.id}` : undefined}
                         disabled={isLockedFinal}
                         value={item.lineAmount}
                         placeholder="Isi total harga"
@@ -708,6 +692,7 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
                                 ? {
                                     ...it,
                                     lineAmount: val,
+                                    unitMismatchConfirmed: false,
                                     reviewConfirmed: true,
                                     ambiguityReason: null,
                                   }
@@ -753,28 +738,8 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
                       )}
                     </button>
 
-                    {hasUnitMismatch && (
-                      <label className="inline-flex items-center gap-1.5 text-xs font-bold text-[#9A4A12] cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(item.unitMismatchConfirmed)}
-                          onChange={(e) =>
-                            updateBillState((prev) => ({
-                              ...prev,
-                              items: prev.items.map((it) =>
-                                it.id === item.id
-                                  ? {
-                                      ...it,
-                                      unitMismatchConfirmed: e.target.checked,
-                                    }
-                                  : it,
-                              ),
-                            }))
-                          }
-                          className="rounded border-[#9A4A12]"
-                        />
-                        Gunakan total harga di struk
-                      </label>
+                    {hasUnitMismatch && item.unitMismatchConfirmed && (
+                      <span className="text-xs text-[#146346]">Menggunakan total {formatRupiah(item.lineAmount)} sesuai pilihanmu.</span>
                     )}
                   </div>
 
@@ -782,7 +747,7 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
                     <div className="pt-2 border-t border-[#D8E2F2]">
                       <MoneyInput
                         id={`item-unit-${item.id}`}
-                        label="Harga per satuan (opsional)"
+                        label="Harga satuan (opsional)"
                         disabled={isLockedFinal}
                         value={item.unitPrice ?? null}
                         allowNull
@@ -791,7 +756,7 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
                             ...prev,
                             items: prev.items.map((it) =>
                               it.id === item.id
-                                ? { ...it, unitPrice: val }
+                                ? { ...it, unitPrice: val, unitMismatchConfirmed: false, reviewConfirmed: false }
                                 : it,
                             ),
                           }))
@@ -838,12 +803,13 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
 
           {bill.adjustments.length === 0 ? (
             <div className="text-xs text-[#4A5B7C] bg-[#F4F7FC] border border-dashed border-[#D8E2F2] rounded-2xl p-3.5 text-center">
-              Tidak ada pajak atau diskon? Kamu bisa langsung lanjut. Jika ada
-              pada struk, tambahkan lewat tombol di bawah.
+              Tambahkan pajak, biaya, atau diskon jika ada di struk.
             </div>
           ) : (
             <div className="space-y-3">
               {bill.adjustments.map((adj) => {
+                const discountedItem = adj.kind === "item-discount" && adj.eligibleItemIds.length === 1
+                  ? bill.items.find(item => item.id === adj.eligibleItemIds[0]) : null;
                 const isPartialScope =
                   adj.eligibleItemIds.length < bill.items.length;
                 const availableServices = bill.adjustments.filter(
@@ -872,9 +838,9 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
                                   ? "Pembulatan"
                                   : "Biaya"}
                         </span>
-                        {adj.mode === "included" && (
+                        {receiptAdjustmentLabel(adj) && (
                           <span className="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-[#E6F5EF] text-[#146346]">
-                            Sudah termasuk di harga menu
+                            {receiptAdjustmentLabel(adj)}
                           </span>
                         )}
                       </div>
@@ -898,13 +864,14 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
                       )}
                     </div>
 
+                    {discountedItem && <p className="text-xs text-[#4A5B7C]">Untuk {discountedItem.name}</p>}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                       <div>
                         <label
                           htmlFor={`adj-name-${adj.id}`}
                           className="text-xs font-semibold text-[#4A5B7C] block mb-1"
                         >
-                          Nama biaya atau diskon
+                          {adj.kind.endsWith("discount") ? "Nama diskon" : "Nama biaya"}
                         </label>
                         <input
                           id={`adj-name-${adj.id}`}
@@ -932,9 +899,10 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
                       {adj.amountSource === "observed" ? (
                         <MoneyInput
                           id={`adj-amt-${adj.id}`}
-                          label="Jumlah pada struk"
+                          label={adj.kind.endsWith("discount") ? "Potongan harga" : "Jumlah pada struk"}
                           disabled={isLockedFinal}
                           value={adj.amount}
+                          allowNull
                           onChange={(val) =>
                             updateBillState((prev) => ({
                               ...prev,
@@ -942,9 +910,8 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
                                 a.id === adj.id
                                   ? {
                                       ...a,
-                                      amount: val ?? 0,
+                                      amount: val,
                                       reviewConfirmed: true,
-                                      scopeConfirmed: true,
                                     }
                                   : a,
                               ),
@@ -980,7 +947,6 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
                                         ...a,
                                         rateBps: bps,
                                         reviewConfirmed: true,
-                                        scopeConfirmed: true,
                                       }
                                     : a,
                                 ),
@@ -992,6 +958,35 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
                       )}
                     </div>
 
+                    <DiscountTreatmentNotice adjustment={adj} locked={isLockedFinal}
+                      onSubtract={() => updateBillState(prev => ({ ...prev, adjustments: prev.adjustments.map(a => a.id === adj.id
+                        ? { ...a, mode: "added", discountNeedsReview: false, reviewConfirmed: true } : a) }))}
+                      onAlreadyIncluded={() => updateBillState(prev => ({ ...prev, adjustments: prev.adjustments.filter(a => a.id !== adj.id) }))}
+                    />
+                    {adj.basisNeedsReview && (
+                      <label className="block text-xs text-[#9A4A12] space-y-1">
+                        <span>Dasar perhitungan belum jelas. Pilih sesuai struk.</span>
+                        <select aria-label={`Dasar perhitungan ${adj.name}`} value="" disabled={isLockedFinal}
+                          onChange={event => {
+                            const basis = event.target.value;
+                            if (basis !== "gross" && basis !== "net") return;
+                            updateBillState(prev => ({ ...prev, adjustments: prev.adjustments.map(a => a.id === adj.id ? { ...a, basis, basisNeedsReview: false } : a) }));
+                          }} className="block w-full min-h-[44px] rounded-xl border border-[#E8CB83] bg-white px-3">
+                          <option value="">Pilih dasar hitung</option>
+                          <option value="gross">Harga sebelum diskon</option>
+                          <option value="net">Harga setelah diskon</option>
+                        </select>
+                      </label>
+                    )}
+                    {!adj.scopeConfirmed && adj.kind !== "rounding" && (
+                      <div className="rounded-xl bg-[#FFF3E6] p-3 space-y-2 text-xs text-[#9A4A12]">
+                        <p>Periksa pesanan yang mendapat {adj.name}. Ubah daftar di bawah jika hanya berlaku untuk sebagian pesanan.</p>
+                        <button type="button" disabled={isLockedFinal} className="min-h-[44px] rounded-xl border border-[#E8CB83] bg-white px-3 font-bold"
+                          onClick={() => updateBillState(prev => ({ ...prev, adjustments: prev.adjustments.map(a => a.id === adj.id ? { ...a, scopeConfirmed: true } : a) }))}>
+                          {isPartialScope ? "Pilihan pesanan sudah sesuai" : "Benar, berlaku untuk semua pesanan"}
+                        </button>
+                      </div>
+                    )}
                     {/* Opsi Tambahan untuk Pajak / Pembulatan / Scope Item */}
                     <div className="flex flex-wrap items-center gap-3 pt-1 text-xs text-[#4A5B7C]">
                       {adj.kind === "tax" && (
@@ -1016,7 +1011,7 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
                               }))
                             }
                           />
-                          Pajak sudah termasuk di harga menu
+                          Pajak sudah termasuk dalam harga pesanan
                         </label>
                       )}
 
@@ -1053,7 +1048,7 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
 
                       {adj.kind === "rounding" && (
                         <div className="inline-flex items-center gap-2">
-                          <span className="font-semibold">Arah:</span>
+                          <span className="font-semibold">Pembulatan ini:</span>
                           <button
                             type="button"
                             disabled={isLockedFinal}
@@ -1062,13 +1057,13 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
                                 ...prev,
                                 adjustments: prev.adjustments.map((a) =>
                                   a.id === adj.id
-                                    ? { ...a, sign: "positive" }
+                                    ? { ...a, sign: "positive", directionNeedsReview: false }
                                     : a,
                                 ),
                               }))
                             }
                             className={`px-2.5 py-1 rounded-lg font-bold ${
-                              adj.sign !== "negative"
+                              adj.sign === "positive" && !adj.directionNeedsReview
                                 ? "bg-[#2855D9] text-white"
                                 : "bg-white border border-[#D8E2F2]"
                             }`}
@@ -1083,13 +1078,13 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
                                 ...prev,
                                 adjustments: prev.adjustments.map((a) =>
                                   a.id === adj.id
-                                    ? { ...a, sign: "negative" }
+                                    ? { ...a, sign: "negative", directionNeedsReview: false }
                                     : a,
                                 ),
                               }))
                             }
                             className={`px-2.5 py-1 rounded-lg font-bold ${
-                              adj.sign === "negative"
+                              adj.sign === "negative" && !adj.directionNeedsReview
                                 ? "bg-[#2855D9] text-white"
                                 : "bg-white border border-[#D8E2F2]"
                             }`}
@@ -1111,10 +1106,10 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
                         </summary>
                         <div className="flex items-center justify-between text-[11px]">
                           <span className="font-semibold text-[#4A5B7C]">
-                            Berlaku untuk menu (
+                            Berlaku untuk pesanan (
                             {isPartialScope
-                              ? `${adj.eligibleItemIds.length} dari ${bill.items.length} menu`
-                              : "Semua menu"}
+                              ? `${adj.eligibleItemIds.length} dari ${bill.items.length} pesanan`
+                              : "Semua pesanan"}
                             ):
                           </span>
                           {!isLockedFinal && isPartialScope && (
@@ -1267,7 +1262,7 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
 
           <div className="space-y-2 text-xs text-[#4A5B7C] bg-[#F4F7FC] p-3.5 rounded-2xl border border-[#D8E2F2]">
             <div className="flex justify-between">
-              <span>Subtotal pesanan ({bill.items.length} item)</span>
+              <span>Subtotal pesanan ({bill.items.length} pesanan)</span>
               <span className="font-bold text-[#17233B] tabular-money">
                 {hasMissingAmounts
                   ? "Belum lengkap"
@@ -1323,6 +1318,9 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
                 }))
               }
             />
+            {bill.observedGrandTotal != null && (
+              <p className="mt-2 text-xs text-[#4A5B7C]">Total dari scan: {formatRupiah(bill.observedGrandTotal)}. Koreksi hanya jika berbeda dari struk.</p>
+            )}
           </div>
 
           {/* Status Kecocokan */}
@@ -1347,7 +1345,7 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
                 />
                 <span>
                   {calc.grandTotalDifference === null
-                    ? "Isi Total yang dibayar di kasir terlebih dahulu."
+                    ? "Isi total akhir di struk terlebih dahulu."
                     : calc.grandTotalDifference < 0
                       ? `Jumlah rincian lebih kecil ${formatRupiah(
                           Math.abs(calc.grandTotalDifference),
@@ -1357,34 +1355,7 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
                         )} dari total struk.`}
                 </span>
               </div>
-              {!isLockedFinal && (
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      updateBillState((prev) => ({
-                        ...prev,
-                        confirmedGrandTotal: calc.computedGrandTotal,
-                      }))
-                    }
-                    className="min-h-[44px] px-3 py-1.5 rounded-xl bg-white border border-[#9A4A12] font-bold text-[#9A4A12] inline-flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
-                    Gunakan total hitungan:{" "}
-                    {formatRupiah(calc.computedGrandTotal)}
-                  </button>
-                  {calc.grandTotalDifference !== null && (
-                    <button
-                      type="button"
-                      onClick={() => handleAddAdjustmentPreset("rounding")}
-                      className="min-h-[44px] px-3 py-1.5 rounded-xl bg-[#9A4A12] text-white font-bold cursor-pointer"
-                    >
-                      Tambah pembulatan{" "}
-                      {formatRupiah(Math.abs(calc.grandTotalDifference))}
-                    </button>
-                  )}
-                </div>
-              )}
+              <p>Periksa pesanan, topping, pajak, dan diskon. Tambahkan pembulatan hanya jika tercantum di struk.</p>
             </div>
           )}
         </section>
