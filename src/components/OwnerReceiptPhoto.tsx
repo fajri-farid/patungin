@@ -145,7 +145,7 @@ export function OwnerReceiptPhoto({
           className="flex items-center gap-3 rounded-2xl border border-[#F5CA86] bg-[#FFF8F0] p-3.5 text-xs font-semibold text-[#9A4A12]"
         >
           <Loader2 size={17} className={`${ui.spinner} shrink-0`} aria-hidden="true" />
-          <span>Menghapus foto struk dari penyimpanan…</span>
+          <span>Menghapus foto struk dari tagihan…</span>
         </div>
       )}
 
@@ -371,7 +371,8 @@ export function OwnerReceiptPhoto({
 
       {enabled && (
         <p className="text-xs text-[#4A5B7C]">
-          Foto dihapus otomatis setelah masa akses 24 jam. Mengganti foto
+          Akses foto berakhir setelah 24 jam atau saat dihapus dari tagihan.
+          File dibersihkan otomatis pada jadwal berikutnya. Mengganti foto
           referensi tidak menjalankan scan ulang.
         </p>
       )}

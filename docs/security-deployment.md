@@ -36,7 +36,7 @@ firebase deploy --only "firestore:rules,firestore:indexes" --project YOUR_PROJEC
 
 Tunggu indeks siap sebelum memakai upload QRIS. Verifikasi juga IAM bucket privat, Public Access Prevention, dan least privilege service account; rules Firebase tidak membatasi Admin SDK. Jangan membuat bucket publik untuk mengatasi 403.
 
-Jalankan scheduler POST cleanup setiap 15 menit dengan secret header. Cleanup harus berjalan walaupun fitur upload dimatikan. Terapkan TTL metadata dan lifecycle terbatas `receipts/`; jangan menghapus prefix `payment-qris/` dengan lifecycle struk. Periksa soft delete/versioning serta retensi fisik sesuai [panduan storage](receipt-storage.md).
+Aktifkan Vercel Cron harian bawaan dengan `CRON_SECRET` Production, atau scheduler POST eksternal setiap 15 menit dengan `RECEIPT_CLEANUP_SECRET` untuk target pembersihan lebih cepat. Cleanup harus berjalan walaupun fitur upload dimatikan. Terapkan TTL metadata dan lifecycle terbatas `receipts/`; jangan menghapus prefix `payment-qris/` dengan lifecycle struk. Periksa soft delete/versioning serta retensi fisik sesuai [panduan storage](receipt-storage.md).
 
 ## Pemeriksaan yang sudah dijalankan
 
