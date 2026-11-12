@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import crypto from "node:crypto";
+import sharp from "sharp";
 import { parseAllowedEmails } from "../src/server/config/env";
 import { validateAndInspectImageBytes } from "../src/server/scans/gemini";
 import {
@@ -121,21 +122,21 @@ describe("Keamanan Akses, Token Share, Validasi File, & Konkurensi", () => {
     expect(verifyShareTokenSignature("")).toBeNull();
   });
 
-  it("SCAN-01: Validasi magic bytes gambar menerima JPEG/PNG/WebP dan menolak HEIC atau file palsu", () => {
-    const fakeJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
-    const resJpeg = validateAndInspectImageBytes(fakeJpeg);
+  it("SCAN-01: Validasi gambar menerima JPEG nyata dan menolak HEIC atau file palsu", async () => {
+    const jpeg = await sharp({ create: { width: 16, height: 16, channels: 3, background: "white" } }).jpeg().toBuffer();
+    const resJpeg = await validateAndInspectImageBytes(jpeg);
     expect(resJpeg.mimeType).toBe("image/jpeg");
     expect(resJpeg.imageHash).toHaveLength(64);
 
     // Simulasi header HEIC (....ftypheic)
     const fakeHeic = Buffer.from("\x00\x00\x00\x18ftypheic0000", "ascii");
-    expect(() => validateAndInspectImageBytes(fakeHeic)).toThrow(
+    await expect(validateAndInspectImageBytes(fakeHeic)).rejects.toThrow(
       /HEIC belum dapat diproses/i
     );
 
     // File teks menyamar jadi gambar
     const fakeText = Buffer.from("Hello world not an image", "utf8");
-    expect(() => validateAndInspectImageBytes(fakeText)).toThrow(
+    await expect(validateAndInspectImageBytes(fakeText)).rejects.toThrow(
       /Format gambar tidak didukung/i
     );
   });
@@ -159,7 +160,7 @@ describe("Keamanan Akses, Token Share, Validasi File, & Konkurensi", () => {
         expectedRevision: 1,
         title: "Bajak",
       })
-    ).rejects.toThrow(/tidak memiliki akses/i);
+    ).rejects.toMatchObject({ code: "FORBIDDEN_BILL_ACCESS", statusCode: 403 });
 
     // Simpan perubahan dengan revision yang benar (1 -> 2)
     const updated = await saveBillDraft(draft.id, ownerUid, {

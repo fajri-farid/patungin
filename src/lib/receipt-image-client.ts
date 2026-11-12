@@ -1,7 +1,8 @@
 /**
- * Mengoptimasi gambar struk di browser (rotasi, crop vertikal opsional, dan resize <= 2400px)
- * agar angka tetap tajam namun ukuran upload di bawah batas 2 MiB server.
+ * Mengoptimasi foto dengan batas piksel; struk panjang mempertahankan detail teks.
+ * Ukuran upload tetap di bawah batas 2 MiB server.
  */
+import { encodeReceiptCanvas, receiptImageDimensions } from "./receipt-image-layout";
 export async function processReceiptImageOnClient(params: {
   dataUrl: string;
   rotationDeg: number;
@@ -22,15 +23,12 @@ export async function processReceiptImageOnClient(params: {
         const rawOutW = isRotated90 ? srcH : srcW;
         const rawOutH = isRotated90 ? srcW : srcH;
 
-        const maxSide = 2400;
-        const scale =
-          Math.max(rawOutW, rawOutH) > maxSide
-            ? maxSide / Math.max(rawOutW, rawOutH)
-            : 1;
+        const dimensions = receiptImageDimensions(rawOutW, rawOutH);
+        const scale = Math.min(dimensions.width / rawOutW, dimensions.height / rawOutH);
 
         const canvas = document.createElement("canvas");
-        canvas.width = Math.max(1, Math.round(rawOutW * scale));
-        canvas.height = Math.max(1, Math.round(rawOutH * scale));
+        canvas.width = dimensions.width;
+        canvas.height = dimensions.height;
 
         const ctx = canvas.getContext("2d");
         if (!ctx) {
@@ -63,25 +61,17 @@ export async function processReceiptImageOnClient(params: {
         );
         ctx.restore();
 
-        // Encode JPEG once. FileReader derives the persistent tab preview from those bytes.
-        canvas.toBlob(
-          (blob) => {
-            if (!blob) {
-              reject(new Error("Gagal memproses gambar struk."));
-              return;
-            }
-            const reader = new FileReader();
-            reader.onload = () => {
-              if (typeof reader.result === "string") resolve({ blob, previewDataUrl: reader.result });
-              else reject(new Error("Pratinjau foto belum bisa disiapkan. Coba lagi."));
-            };
-            reader.onerror = () => reject(new Error("Pratinjau foto belum bisa disiapkan. Coba lagi."));
-            reader.onabort = reader.onerror;
-            reader.readAsDataURL(blob);
-          },
-          "image/jpeg",
-          0.86,
-        );
+        // Preview and upload use the same encoded bytes within the server limit.
+        void encodeReceiptCanvas(canvas).then((blob) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            if (typeof reader.result === "string") resolve({ blob, previewDataUrl: reader.result });
+            else reject(new Error("Foto belum bisa ditampilkan. Coba lagi."));
+          };
+          reader.onerror = () => reject(new Error("Foto belum bisa ditampilkan. Coba lagi."));
+          reader.onabort = reader.onerror;
+          reader.readAsDataURL(blob);
+        }).catch(reject);
       } catch {
         reject(new Error("Foto belum bisa diolah. Pilih foto yang lebih kecil atau isi manual."));
       }
@@ -89,7 +79,7 @@ export async function processReceiptImageOnClient(params: {
     img.onerror = () =>
       reject(
         new Error(
-          "Format gambar tidak dapat dibaca browser. Gunakan JPEG, PNG, atau WebP.",
+          "Foto belum bisa dibuka. Pilih JPG, PNG, atau WebP.",
         ),
       );
     img.src = params.dataUrl;

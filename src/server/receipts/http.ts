@@ -59,7 +59,7 @@ export async function limitedFormData(request: Request, maximum: number) {
     throw new AppServiceError(
       400,
       "INVALID_FORM",
-      "Unggahan foto tidak valid.",
+      "Foto belum bisa dikirim. Pilih ulang foto dan coba lagi.",
     );
   } finally {
     reader.releaseLock();

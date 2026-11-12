@@ -77,7 +77,7 @@ export async function verifyRequestOrigin(request?: Request): Promise<void> {
     throw new AuthGuardError(
       403,
       "ORIGIN_MISSING",
-      "Permintaan ditolak karena header Origin tidak ditemukan."
+      "Perubahan belum bisa diproses. Muat ulang halaman lalu coba lagi."
     );
   }
 
@@ -88,7 +88,7 @@ export async function verifyRequestOrigin(request?: Request): Promise<void> {
       throw new AuthGuardError(
         403,
         "ORIGIN_MISMATCH",
-        "Origin permintaan tidak sesuai dengan konfigurasi aplikasi."
+        "Halaman ini belum bisa menyimpan perubahan. Buka ulang Patungin lalu coba lagi."
       );
     }
   } catch (err) {
@@ -96,7 +96,7 @@ export async function verifyRequestOrigin(request?: Request): Promise<void> {
     throw new AuthGuardError(
       403,
       "ORIGIN_INVALID",
-      "Format header Origin tidak valid."
+      "Perubahan belum bisa diproses. Muat ulang halaman lalu coba lagi."
     );
   }
 }
@@ -352,7 +352,7 @@ export async function requireAuthenticatedHost(): Promise<AuthenticatedHost> {
     throw new AuthGuardError(
       401,
       "UNAUTHENTICATED",
-      "Sesi berakhir atau belum masuk. Silakan login kembali."
+      "Sesi masuk sudah berakhir. Masuk lagi untuk melanjutkan."
     );
   }
   return host;

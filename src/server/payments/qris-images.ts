@@ -26,7 +26,7 @@ function assertEnabled() {
     throw new AppServiceError(
       503,
       "QRIS_DISABLED",
-      "Unggah QRIS belum tersedia. Konfigurasikan bucket Storage aplikasi.",
+      "Gambar QRIS belum bisa disimpan saat ini. Coba lagi nanti.",
     );
 }
 export async function uploadQrisImage(ownerUid: string, bytes: Buffer) {
@@ -39,7 +39,7 @@ export async function uploadQrisImage(ownerUid: string, bytes: Buffer) {
     throw new AppServiceError(
       422,
       "INVALID_QRIS",
-      "Pilih gambar QRIS JPG, PNG, atau WebP maksimal 2 MiB.",
+      "Pilih gambar QRIS JPG, PNG, atau WebP maksimal 2 MB.",
     );
   const now = Date.now();
   const record: QrisImageRecord = {
@@ -64,7 +64,7 @@ export async function uploadQrisImage(ownerUid: string, bytes: Buffer) {
       throw new AppServiceError(
         429,
         "QRIS_UPLOAD_LIMIT",
-        "Maksimal 10 unggahan QRIS per jam. Coba nanti.",
+        "Kamu sudah menyimpan 10 gambar QRIS dalam satu jam. Coba lagi nanti.",
       );
     // Includes pre-existing records and pending deletions. The quota document
     // serializes concurrent uploads across serverless instances.
@@ -77,7 +77,7 @@ export async function uploadQrisImage(ownerUid: string, bytes: Buffer) {
       throw new AppServiceError(
         429,
         "QRIS_STORAGE_LIMIT",
-        "Batas simpan QRIS tercapai atau unggahan masih diproses. Tunggu pembersihan sebelum mengunggah lagi.",
+        "Gambar QRIS belum bisa disimpan. Tunggu sebentar lalu coba lagi.",
       );
     tx.set("qrisUploadQuotas", ownerUid, { hour, attempts: attempts + 1 });
     tx.set("qrisImages", record.id, record);
@@ -92,7 +92,7 @@ export async function uploadQrisImage(ownerUid: string, bytes: Buffer) {
         throw new AppServiceError(
           409,
           "QRIS_UPLOAD_EXPIRED",
-          "Unggahan berakhir. Pilih ulang gambar QRIS.",
+          "Gambar QRIS belum tersimpan. Pilih ulang gambar.",
         );
       tx.set("qrisImages", record.id, {
         ...current,

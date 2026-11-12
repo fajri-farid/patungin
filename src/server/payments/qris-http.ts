@@ -31,14 +31,14 @@ export function qrisError(
           ? "QRIS_STORAGE_TIMEOUT"
           : "QRIS_STORAGE_CONNECTION_FAILED";
       message =
-        "Koneksi ke Storage terputus atau terlalu lama saat membaca QRIS. Coba muat ulang gambarnya.";
+        "Gambar QRIS belum bisa dimuat. Periksa koneksi lalu coba lagi.";
     } else if (
       downloadCode === "STORAGE_DOWNLOAD_INTEGRITY" ||
       downloadCode === "STORAGE_DOWNLOAD_TOO_LARGE"
     ) {
       code = "QRIS_STORAGE_INTEGRITY_ERROR";
       message =
-        "Gambar QRIS belum berhasil dibaca secara utuh. Coba lagi atau unggah ulang gambar.";
+        "Gambar QRIS belum bisa dibuka. Coba lagi atau pilih ulang gambar.";
     } else if (providerCode === 404) {
       code =
         operation === "upload"
@@ -47,24 +47,24 @@ export function qrisError(
       status = operation === "upload" ? 503 : 404;
       message =
         operation === "upload"
-          ? "Bucket QRIS tidak ditemukan. Periksa FIREBASE_QRIS_STORAGE_BUCKET; kosongkan untuk memakai FIREBASE_STORAGE_BUCKET."
+          ? "Gambar QRIS belum bisa disimpan saat ini. Coba lagi nanti."
           : "Gambar QRIS tidak ditemukan atau sudah dihapus.";
     } else if (providerCode === 403) {
       code = "QRIS_STORAGE_PERMISSION_DENIED";
       message =
-        "Server belum mendapat izin mengakses bucket QRIS. Periksa izin Storage Object User pada service account aplikasi.";
+        "Gambar QRIS belum bisa diakses saat ini. Coba lagi nanti.";
     } else if (providerCode === 401) {
       code = "QRIS_STORAGE_AUTH_FAILED";
       message =
-        "Autentikasi server ke Storage gagal. Periksa konfigurasi service account Firebase.";
+        "Gambar QRIS belum bisa diakses saat ini. Coba lagi nanti.";
     } else if (providerCode === 400) {
       code = "QRIS_STORAGE_CONFIG_ERROR";
       message =
-        "Konfigurasi Storage QRIS tidak valid. Isi nama bucket tanpa gs:// atau URL console.";
+        "Gambar QRIS belum bisa diakses saat ini. Coba lagi nanti.";
     } else if (providerCode === 429) {
       code = "QRIS_STORAGE_BUSY";
       message =
-        "Layanan penyimpanan QRIS sedang dibatasi. Tunggu sebentar lalu coba lagi.";
+        "Banyak gambar QRIS sedang diproses. Tunggu sebentar lalu coba lagi.";
     }
   }
   if (status >= 500 || (operation === "upload" && status === 422))

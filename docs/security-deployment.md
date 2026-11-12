@@ -2,6 +2,25 @@
 
 Audit repository: 8 November 2026, Asia/Singapore. Ini pemeriksaan kode, dependency, file publikasi, dan build production lokal; bukan sertifikasi keamanan atau penetration test production.
 
+## Pemeliharaan dependency v1.1.3: 11 November 2026
+
+- Next/eslint-config-next 16.4.6, React/React DOM 19.3.1, google-auth-library 11.3.4, Firebase 13.2.0, Lucide 1.71.0, Vitest 5.1.0, dan Tailwind/plugin Turbopack 4.3.5 sudah diuji bersama. Node tetap 24.x dan pnpm tetap 12.10.1.
+- Firebase baru membawa @firebase/firestore 4.19.1. Target override gRPC disesuaikan ke versi tersebut agar tetap memakai 1.14.7; override lain dan patch jwks-rsa dipertahankan. Audit akhir seluruh dependency termasuk development melaporkan 0 advisory.
+- Verifikasi: frozen lockfile offline, 408 tes pada 33 file, typecheck, lint, dan build production lulus. CI juga mendapat langkah typecheck eksplisit.
+- Smoke test browser memakai sandbox dengan data serta penyimpanan sintetis: sesi, upload, scan simulasi, review, pembagian/finalisasi, link anonim dengan foto opt-in, dan penyimpanan profil pembayaran lulus. Review/hasil/pembayaran diperiksa pada lebar 320–1280 piksel tanpa overflow horizontal; tidak ditemukan error/warning pada log browser yang diperiksa.
+- Smoke test runtime production lokal memverifikasi security headers halaman utama dan penolakan anonim 401 dengan private/no-store pada scan, foto owner, dan QRIS. Tidak menguji login Google, Gemini, atau konfigurasi IAM/rules deployment live dalam pemeliharaan ini.
+- Migrasi mayor Gemini SDK, ESLint, dan TypeScript tidak dimasukkan pada putaran ini. TypeScript 7 belum sesuai dengan peer parser/plugin @typescript-eslint yang terpasang (`>=4.8.4 <6.1.0`).
+
+## Pembaruan alur scan: 11 November 2026
+
+- Endpoint scan memvalidasi signature lengkap PNG, metadata, batas 16 megapiksel, satu frame, dan decode piksel JPEG/PNG/WebP sebelum reservasi kuota atau pemanggilan AI. Gambar rusak, animasi, dan resolusi berlebihan ditolak. Byte asli dipertahankan agar validasi tidak menurunkan keterbacaan struk panjang; batas file tetap 2 MiB.
+- Diskon yang disebut sudah termasuk harga net tetap memerlukan keputusan host bila model meragukan diskon, item target, atau bukti cakupannya. Review umum tidak menghilangkan kewajiban ini.
+- Prompt OCR v6 menegaskan bahwa total grup tercetak termasuk topping harus dipertahankan untuk satu maupun beberapa unit; harga dasar × jumlah tidak menggantikannya. Rekonsiliasi tetap memblokir total yang tidak cocok.
+- Override khusus dependency `@google-cloud/storage>fast-xml-parser` memakai patch 5.12.0 untuk [GHSA-474x-hrwr-fgx4](https://github.com/advisories/GHSA-474x-hrwr-fgx4).
+- Verifikasi lokal: 408 tes pada 33 file, typecheck, lint, dan build production lulus. Audit dependency produksi tidak melaporkan advisory saat pemeriksaan. Sepuluh gambar sintetis melalui API Gemini asli memenuhi ekspektasi pada satu putaran prompt v6, termasuk kasus topping yang gagal pada prompt v5. Hasil sampel kecil ini bukan estimasi akurasi produksi; review manusia dan pengujian gambar nyata tetap diperlukan.
+
+Rincian pemeriksaan di bawah mencatat audit awal 8 November; perubahan scan di atas diverifikasi pada 11 November. Konfigurasi IAM, rules, serta kapasitas deployment live tetap perlu diverifikasi operator.
+
 ## Perlindungan dalam kode
 
 - Login Google diverifikasi dengan revocation check, email terverifikasi, dan login baru untuk pertukaran cookie. Sesi production memakai cookie host-only `__Host-`, `Secure`, `HttpOnly`, dan `SameSite=Lax`.

@@ -8,6 +8,7 @@
  */
 
 import { computeFinancialInputHash } from "./hash";
+import { needsQuantityReview, receiptItemLabel } from "./receipt-review";
 import { normalizePaymentMethods, paymentMethodLabel } from "./payment";
 import {
   allocateLargestRemainder,
@@ -152,6 +153,10 @@ export function calculateBill(input: BillCalculationInput): CalculationResult {
   > = {};
 
   for (const item of input.items) {
+    if (needsQuantityReview(item)) {
+      issues.push({ code: "ITEM_QUANTITY_UNCONFIRMED", stage: "review", severity: "error", itemId: item.id,
+        message: "Pastikan jumlah pesanan sesuai struk. Angka sementara belum dikonfirmasi." });
+    }
     itemGrossAllocations[item.id] = {};
     itemNetAllocations[item.id] = {};
     itemDiscountByItemParticipant[item.id] = {};
@@ -235,9 +240,7 @@ export function calculateBill(input: BillCalculationInput): CalculationResult {
         stage: "review",
         severity: "error",
         itemId: item.id,
-        message: item.ambiguityReason
-          ? `Item "${item.name}" perlu dicek: ${item.ambiguityReason}`
-          : `Item "${item.name}" belum diperiksa. Buka Cek struk untuk melanjutkan.`,
+        message: `Pesanan "${item.name}" belum diperiksa. Cocokkan nama, jumlah, dan harganya dengan struk.`,
       });
     }
 
@@ -367,6 +370,8 @@ export function calculateBill(input: BillCalculationInput): CalculationResult {
 
   // Inisialisasi struktur alokasi per adjustment
   for (const adj of sortedAdjustments) {
+    if (adj.discountNeedsReview) issues.push({ code: "DISCOUNT_TREATMENT_UNCONFIRMED", stage: "review", severity: "error", adjustmentId: adj.id,
+      message: "Pastikan apakah diskon masih mengurangi harga atau sudah masuk harga pesanan." });
     adjustmentParticipantAllocations[adj.id] = {};
     adjustmentItemAllocations[adj.id] = {};
     for (const p of input.participants) {
@@ -383,6 +388,10 @@ export function calculateBill(input: BillCalculationInput): CalculationResult {
   // Validasi umum komponen dan periksa siklus dependency
   const seenAddedIdsInOrder = new Set<string>();
   for (const adj of sortedAdjustments) {
+    if (adj.directionNeedsReview) issues.push({ code: "ROUNDING_DIRECTION_UNCONFIRMED", stage: "review", severity: "error", adjustmentId: adj.id,
+      message: "Pilih apakah pembulatan menambah atau mengurangi total." });
+    if (adj.basisNeedsReview) issues.push({ code: "ADJUSTMENT_BASIS_UNCONFIRMED", stage: "review", severity: "error", adjustmentId: adj.id,
+      message: "Pastikan dasar perhitungan biaya atau pajak ini sesuai struk." });
     if (!adj.reviewConfirmed) {
       issues.push({
         code: "ADJUSTMENT_UNCONFIRMED",
@@ -1007,7 +1016,7 @@ export function buildDetailedParticipantShares(
 
         return {
           itemId: item.id,
-          itemName: item.name,
+          itemName: receiptItemLabel(item),
           mode: alloc?.mode ?? "shared",
           ...(alloc?.mode === "units" ? { units: alloc.unitCounts?.[p.id] ?? 0 } : {}),
           totalUnits: item.quantity,
@@ -1034,7 +1043,7 @@ export function buildDetailedParticipantShares(
           adjustmentId: adj.id,
           name: adj.name,
           kind: adj.kind,
-          mode: adj.mode,
+          mode: adj.kind.endsWith("discount") ? "added" as const : adj.mode,
           signedAmount: signed,
           absoluteAmount: abs,
         };
@@ -1062,12 +1071,12 @@ export function buildDetailedParticipantShares(
 export function buildReceiptDetails(input: BillCalculationInput, result: CalculationResult): ReceiptDetails {
   return {
     items: input.items.map(item => ({
-      id: item.id, name: item.name, quantity: item.quantity, lineAmount: item.lineAmount ?? 0,
+      id: item.id, name: receiptItemLabel(item), quantity: item.quantity, lineAmount: item.lineAmount ?? 0,
     })),
     adjustments: input.adjustments.map(adjustment => {
       const amount = Object.values(result.adjustmentParticipantAllocations[adjustment.id] ?? {}).reduce((sum, value) => sum + value, 0);
       const negative = adjustment.kind.endsWith("discount") || (adjustment.kind === "rounding" && adjustment.sign === "negative");
-      return { id: adjustment.id, name: adjustment.name, mode: adjustment.mode, signedAmount: negative ? -amount : amount };
+      return { id: adjustment.id, name: adjustment.name, mode: adjustment.kind.endsWith("discount") ? "added" as const : adjustment.mode, signedAmount: negative ? -amount : amount };
     }),
     subtotal: result.computedItemsSubtotal,
   };

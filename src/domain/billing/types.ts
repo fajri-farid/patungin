@@ -34,6 +34,12 @@ export interface BillItem {
   reviewConfirmed: boolean;
   unitMismatchConfirmed?: boolean; // True jika host sadar lineAmount != quantity * unitPrice (mis. pembulatan merchant)
   ambiguityReason?: string | null; // Alasan dari OCR jika buram/ambigu
+  quantityStatus?: "observed" | "not_printed" | "unreadable" | "confirmed";
+  receiptIssues?: Array<"CHECK_ITEM" | "MODIFIER_RELATION_UNKNOWN" | "PRICE_DERIVED">;
+  includedModifiers?: string[];
+  /** Printed base price, retained when the payable total includes modifiers. */
+  baseUnitPrice?: number | null;
+  suggestedParentItemId?: string | null;
 }
 
 export type AllocationMode = "units" | "shared";
@@ -77,7 +83,7 @@ export interface BillAdjustment {
   amountSource: AdjustmentAmountSource;
   mode: AdjustmentMode; // "included" hanya berlaku untuk tax/service yang sudah termasuk harga item
   basis: AdjustmentBasis; // "gross" (sebelum diskon) atau "net" (setelah diskon)
-  /** Daftar itemId yang dikenai komponen ini. Jika scopeConfirmed=false, wajib ditinjau host. */
+  /** Targets from explicit receipt evidence or host choice. Unknown scopes require review. */
   eligibleItemIds: string[];
   scopeConfirmed: boolean;
   /** Daftar ID adjustment "added" terdahulu yang ikut masuk dasar perhitungan (mis. pajak atas item + service) */
@@ -86,6 +92,10 @@ export interface BillAdjustment {
   rateBps?: number | null;
   reviewConfirmed: boolean;
   reason?: string | null; // Wajib diisi jika ada penyesuaian manual
+  directionNeedsReview?: boolean;
+  basisNeedsReview?: boolean;
+  /** Discount gross/net evidence is missing or contradictory; host must choose. */
+  discountNeedsReview?: boolean;
 }
 
 export interface BillCalculationInput {
@@ -219,6 +229,7 @@ export interface BillDocument {
   receiptSourceType?: ReceiptSourceType;
   extractionWarnings?: string[];
   printedSubtotal?: number | null;
+  observedGrandTotal?: number | null;
   createdAt: string;
   updatedAt: string;
 }

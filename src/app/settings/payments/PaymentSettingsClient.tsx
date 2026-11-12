@@ -115,13 +115,11 @@ export function PaymentSettingsClient({
           </div>
 
           <p className="text-sm text-[#4A5B7C]">
-            Simpan rekening, e-wallet, atau gambar QRIS agar tinggal dipilih
-            saat patungan. Hanya tujuan pembayaran yang kamu pilih pada tagihan
-            yang ikut dibagikan.
+            Simpan rekening, e-wallet, atau QRIS untuk tagihan berikutnya.
+            Hanya yang kamu pilih di tagihan yang dibagikan.
           </p>
           <p className="text-xs text-[#7687A6]">
-            Perubahan di sini tidak mengubah tagihan lama. Default hanya menjadi
-            rekomendasi saat memilih pada halaman hasil.
+            Pilihan utama ditandai agar mudah ditemukan. Tagihan lama tidak ikut berubah.
           </p>
         </section>
 
@@ -194,8 +192,7 @@ export function PaymentSettingsClient({
               </div>
               <h3>Belum ada tujuan pembayaran tersimpan.</h3>
               <p>
-                Tambahkan rekening bank, e-wallet, atau QRIS di bawah agar
-                tidak perlu mengetik ulang setiap selesai makan bareng.
+                Tambahkan rekening, e-wallet, atau QRIS agar tinggal dipilih saat patungan.
               </p>
             </div>
           ) : (
@@ -239,7 +236,7 @@ export function PaymentSettingsClient({
                       {isDefault && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-[#E6EDFF] px-2.5 py-1 text-xs font-bold text-[#2855D9]">
                           <Star size={12} aria-hidden="true" />
-                          Default
+                          Utama
                         </span>
                       )}
                     </div>
@@ -297,7 +294,7 @@ export function PaymentSettingsClient({
                         }
                       >
                         <Star size={14} aria-hidden="true" />
-                        {isDefault ? "Hapus default" : "Jadikan default"}
+                        {isDefault ? "Batalkan pilihan utama" : "Jadikan utama"}
                       </button>
 
                       <button
@@ -380,7 +377,7 @@ export function PaymentSettingsClient({
             </h2>
 
             <label className="block space-y-1 text-xs font-semibold text-[#4A5B7C]">
-              <span>Label (opsional)</span>
+              <span>Nama pengingat (opsional)</span>
               <input
                 autoFocus
                 name="label"
@@ -433,7 +430,7 @@ export function PaymentSettingsClient({
                 {pending && (
                   <Loader2 size={16} className={ui.spinner} aria-hidden="true" />
                 )}
-                {pending ? "Menyimpan…" : "Simpan tujuan"}
+                {pending ? "Menyimpan…" : "Simpan tujuan pembayaran"}
               </button>
               <button
                 disabled={pending || qrisBusy}

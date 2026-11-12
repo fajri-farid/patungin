@@ -7,7 +7,7 @@ export function SkeletonBlock({ className = "" }: { className?: string }) {
 }
 
 export function ReceiptImageSkeleton({
-  label = "Mengunduh foto struk…",
+  label = "Memuat foto struk…",
 }: {
   label?: string;
 }) {
@@ -131,7 +131,7 @@ export function SavedMethodsInlineSkeleton() {
       aria-live="polite"
       className="space-y-2.5"
     >
-      <span className="sr-only">Memuat daftar tujuan pembayaran tersimpan…</span>
+      <span className="sr-only">Memuat tujuan pembayaran…</span>
       {[0, 1].map((item) => (
         <div
           key={item}
@@ -229,7 +229,7 @@ export function NewBillSkeleton() {
       <AppHeader />
       <main className={ui.main} aria-busy="true">
         <p role="status" className="sr-only">
-          Menyiapkan halaman tagihan baru…
+          Menyiapkan tagihan baru…
         </p>
         <div className="space-y-2 px-0.5" aria-hidden="true">
           <SkeletonBlock className="h-7 w-48 rounded-md" />

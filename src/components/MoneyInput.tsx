@@ -11,6 +11,7 @@ interface MoneyInputProps {
   allowNull?: boolean;
   disabled?: boolean;
   className?: string;
+  describedBy?: string;
 }
 
 /**
@@ -28,6 +29,7 @@ export function MoneyInput({
   allowNull = false,
   disabled = false,
   className = "",
+  describedBy,
 }: MoneyInputProps) {
   const [isFocused, setIsFocused] = useState(false);
   const generatedId = useId();
@@ -82,6 +84,7 @@ export function MoneyInput({
           name={inputId}
           aria-label={label ?? "Jumlah dalam rupiah"}
           aria-invalid={allowNull && (value === null || value === undefined)}
+          aria-describedby={describedBy}
           autoComplete="off"
           type="text"
           inputMode="numeric"

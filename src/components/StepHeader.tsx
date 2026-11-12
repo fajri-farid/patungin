@@ -37,7 +37,7 @@ const STEPS = [
     label: "Bagi pesanan",
     title: "Pilih siapa pesan apa.",
     description:
-      "Tambahkan teman, lalu bagi pesanannya. Menu bareng bisa dibagi ke yang ikut makan.",
+      "Tambahkan teman, lalu bagi pesanannya. Pesanan bareng bisa dibagi ke yang ikut makan.",
   },
   {
     key: "result",

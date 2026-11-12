@@ -64,7 +64,7 @@ export function DashboardClient({
   function handleDeleteBill(bill: BillSummary) {
     if (
       !window.confirm(
-        `Hapus tagihan “${bill.title}”? Tagihan tidak bisa dikembalikan dan link yang sudah dibagikan akan nonaktif.`,
+        `Hapus tagihan “${bill.title}”? Tagihan tidak bisa dikembalikan. Link yang sudah dibagikan juga tidak bisa dibuka lagi.`,
       )
     )
       return;
@@ -127,7 +127,7 @@ export function DashboardClient({
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className={ui.resumeLabel}>
                   <Clock size={14} aria-hidden="true" />
-                  Lanjutkan draft · {draftStepLabel(latestDraft)}
+                  Lanjutkan · {draftStepLabel(latestDraft)}
                 </span>
                 {latestDraft.confirmedGrandTotal !== null && (
                   <span className="text-sm font-extrabold text-[#17233B] tabular-money">

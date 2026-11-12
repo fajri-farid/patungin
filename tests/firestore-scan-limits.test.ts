@@ -96,7 +96,7 @@ describe("Firestore scan boundary (contract fake; no live Firestore or Gemini ca
       extractedData: { sourceType: "cashier_screen", merchant: null, receiptDate: null,
         items: [{ id: "i", allocationOrder: 0, name: "Item", quantity: 1, lineAmount: 7000, reviewConfirmed: false }],
         adjustments: [], printedGrandTotal: 7000, warnings: ["Periksa pantulan pada layar."] } });
-    expect(documents.get(`bills/${bill.id}`)).toMatchObject({ receiptSourceType: "cashier_screen", extractionWarnings: ["Periksa pantulan pada layar."], confirmedInputHash: null });
+    expect(documents.get(`bills/${bill.id}`)).toMatchObject({ receiptSourceType: "cashier_screen", extractionWarnings: ["Periksa pantulan pada layar."], observedGrandTotal: 7000, confirmedInputHash: null });
   });
   it("rejects scan of a stale revision or a finalized bill before consuming quota", async () => {
     const bill = await draft();

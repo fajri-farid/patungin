@@ -4,6 +4,7 @@ import { calculateBill, calculateBillForReview } from "../src/domain/billing/cal
 import { computeFinancialInputHash } from "../src/domain/billing/hash";
 import { proposeLineAmountRecovery } from "../src/domain/billing/recovery";
 import { extractReceiptWithGemini, PROMPT_VERSION } from "../src/server/scans/gemini";
+import { alfamartReceipt } from "./fixtures/alfamart-receipt";
 import { completeScanAttempt, createDraftBill, getBillForOwner, reserveScanAttempt, saveBillDraft } from "../src/server/store/repository";
 
 const { generateContent } = vi.hoisted(() => ({ generateContent: vi.fn() }));
@@ -195,7 +196,7 @@ describe("Cashier screens and transaction image extraction", () => {
     expect(request.config.systemInstruction).toContain("Jangan menambahkan pajak dua kali");
     expect(request.config.responseSchema.properties.sourceType.enum).toContain("cashier_screen");
     expect(request.config.responseSchema.properties.items.items.required).toContain("lineAmount");
-    expect(PROMPT_VERSION).toBe("patungin_transaction_image_v3");
+    expect(PROMPT_VERSION).toBe("patungin_transaction_image_v6");
   });
 
   it("returns an actionable validation error for truncated provider JSON", async () => {
@@ -203,6 +204,22 @@ describe("Cashier screens and transaction image extraction", () => {
     vi.stubEnv("GEMINI_MODEL", "test-only-model");
     generateContent.mockResolvedValue({ text: '{"items":[' });
     await expect(extractReceiptWithGemini({ imageBuffer: Buffer.from([255, 216, 255]), mimeType: "image/jpeg" })).rejects.toMatchObject({ statusCode: 422, code: "INVALID_EXTRACTION" });
+  });
+  it.each(["gemini-3.1-flash-lite", "gemini-3-flash-preview", "gemini-2.5-flash", "custom-model"])("uses compatible reasoning configuration for %s with one provider call", async model => {
+    vi.stubEnv("GEMINI_API_KEY", "test-only");
+    vi.stubEnv("GEMINI_MODEL", model);
+    generateContent.mockResolvedValue({ text: JSON.stringify(alfamartReceipt()) });
+    const result = await extractReceiptWithGemini({ imageBuffer: Buffer.from([255, 216, 255]), mimeType: "image/jpeg" });
+    expect(result.printedGrandTotal).toBe(211000);
+    expect(generateContent).toHaveBeenCalledTimes(1);
+    const config = generateContent.mock.calls[0][0].config;
+    if (model.startsWith("gemini-3")) expect(config.thinkingConfig).toEqual({ thinkingLevel: "HIGH" });
+    else expect(config).not.toHaveProperty("thinkingConfig");
+    expect(config.maxOutputTokens).toBe(model.startsWith("gemini-3") ? 16384 : 8192);
+    expect(config).not.toHaveProperty("temperature");
+    expect(config.responseSchema.required).toContain("printedDiscountTotal");
+    expect(config.responseSchema.properties.adjustments.items.required).toContain("summaryOfAdjustmentIndexes");
+    expect(config.responseSchema.properties.adjustments.items.required).toContain("scopeEvidence");
   });
   it.each([[429, "PROVIDER_RATE_LIMIT"], [401, "PROVIDER_AUTH_ERROR"], [403, "PROVIDER_AUTH_ERROR"], [404, "PROVIDER_MODEL_NOT_FOUND"], [503, "PROVIDER_UNAVAILABLE"]])("classifies structured provider status %s without exposing its raw message", async (status, code) => {
     vi.stubEnv("GEMINI_API_KEY", "test-only");

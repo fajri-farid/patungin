@@ -58,7 +58,7 @@ describe("request recovery", () => {
     }));
     vi.stubGlobal("fetch", fetchMock);
     const request = requestJson("/api/example", { method: "POST" }, 100);
-    const assertion = expect(request).rejects.toThrow("server mungkin masih berjalan");
+    const assertion = expect(request).rejects.toThrow("Cek apakah perubahan sudah tersimpan sebelum mencoba lagi");
     await vi.advanceTimersByTimeAsync(101);
     await assertion;
     expect(fetchMock).toHaveBeenCalledTimes(1);

@@ -1,6 +1,6 @@
 # Setup dan konfigurasi
 
-Fitur opsional v1.1.0: [foto struk sementara dan pengaturan pembayaran](receipt-storage.md). Penyimpanan foto perlu bucket privat serta scheduler cleanup terpisah; pengaturan rekening memakai Firestore yang sudah ada.
+Fitur opsional sejak v1.1.0: [foto struk sementara dan pengaturan pembayaran](receipt-storage.md). Penyimpanan foto perlu bucket privat serta scheduler cleanup terpisah; pengaturan rekening memakai Firestore yang sudah ada.
 
 [Kembali ke README](../README.md) · [Deployment dan operasi](operations.md) · [Deploy ke Vercel](deploy-vercel.md)
 

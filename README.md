@@ -4,11 +4,11 @@
   <img src="public/patungin.png" alt="Patungin — Bagi tagihan makan sesuai pesanan" width="240" />
 </p>
 
-![Patungin 1.0.0](https://img.shields.io/badge/Patungin-1.0.0-2855D9?style=flat-square)
-![Next.js 16.4.3](https://img.shields.io/badge/Next.js-16.4.3-000000?style=flat-square&logo=nextdotjs&logoColor=white)
-![React 19.3.0](https://img.shields.io/badge/React-19.3.0-149ECA?style=flat-square&logo=react&logoColor=white)
+![Patungin 1.1.3](https://img.shields.io/badge/Patungin-1.1.3-2855D9?style=flat-square)
+![Next.js 16.4.6](https://img.shields.io/badge/Next.js-16.4.6-000000?style=flat-square&logo=nextdotjs&logoColor=white)
+![React 19.3.1](https://img.shields.io/badge/React-19.3.1-149ECA?style=flat-square&logo=react&logoColor=white)
 ![TypeScript 5.9.3](https://img.shields.io/badge/TypeScript-5.9.3-3178C6?style=flat-square&logo=typescript&logoColor=white)
-![Tailwind CSS 4.3.3](https://img.shields.io/badge/Tailwind_CSS-4.3.3-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
+![Tailwind CSS 4.3.5](https://img.shields.io/badge/Tailwind_CSS-4.3.5-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
 ![pnpm 12.10.1](https://img.shields.io/badge/pnpm-12.10.1-F69220?style=flat-square&logo=pnpm&logoColor=white)
 [![Lisensi MIT](https://img.shields.io/badge/License-MIT-16A34A?style=flat-square)](LICENSE)
 
@@ -19,6 +19,14 @@ Patungin adalah aplikasi untuk membagi tagihan makan sesuai pesanan setiap orang
 Pembuat tagihan masuk dengan akun Google. Teman yang menerima link bisa langsung melihat bagiannya tanpa login atau memasang aplikasi.
 
 [Fitur](#fitur) · [Cara menjalankan](#cara-menjalankan) · [Teknologi](#teknologi) · [Panduan](#panduan-lengkap)
+
+## Versi saat ini
+
+**1.1.3** merupakan pembaruan pemeliharaan dari 1.1.2 untuk memperbarui Next.js, React, autentikasi, Firebase, ikon, Tailwind, dan Vitest. Override keamanan gRPC disesuaikan dengan versi Firestore yang baru; patch kompatibilitas Firebase Admin tetap dipertahankan. Node.js tetap 24.x dan pnpm tetap 12.10.1.
+
+Perbaikan OCR, review diskon ambigu, dan validasi gambar sebelum pemakaian kuota dari versi 1.1.2 tetap berlaku. Hasil pembacaan AI tetap perlu diperiksa pengguna.
+
+Versi aplikasi mengacu pada `version` di [package.json](package.json). Rincian pemeriksaan keamanan tersedia di [panduan keamanan deployment](docs/security-deployment.md).
 
 ## Fitur
 
@@ -43,7 +51,7 @@ AI membantu membaca struk, jadi hasilnya tetap perlu diperiksa. Transfer dilakuk
 
 ### Yang perlu disiapkan
 
-- **Node.js 24.x**, atau **22.x mulai 22.12.0**.
+- **Node.js 24.x**, sesuai `engines.node` di `package.json` dan runtime deployment.
 - **pnpm 12.10.1** untuk memasang dan menjalankan proyek.
 - **Project Firebase** untuk login Google dan menyimpan tagihan.
 - **API key Gemini**, hanya jika ingin membaca struk dari foto. Input manual tidak memerlukannya.
