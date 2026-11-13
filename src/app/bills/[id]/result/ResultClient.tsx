@@ -3,6 +3,7 @@
 import { PaymentTrackingPanel } from "@/components/PaymentTrackingPanel";
 import { billTrackingView, participantPaymentLabel } from "@/domain/billing/tracking";
 import { paymentTrackingAction } from "@/app/actions/bills";
+import type { TrackingMutation } from "@/server/payments/tracking";
 import React, {
   useMemo,
   useRef,
@@ -125,6 +126,33 @@ export function ResultClient({
   const [actionError, setActionError] = useState<string | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
   const paymentSaveInFlight = useRef(false);
+  const trackingInFlight = useRef(false);
+  const [trackingError, setTrackingError] = useState<{ message: string; participantId?: string; intent?: TrackingMutation; reload?: boolean } | null>(null);
+
+  const saveTracking = (intent: TrackingMutation) => {
+    if (trackingInFlight.current) return;
+    if (intent.billId !== bill.id || intent.finalizationId !== bill.currentFinalizationId || intent.expectedRevision !== bill.revision) {
+      setTrackingError({ message: "Ada perubahan terbaru. Muat ulang dulu.", participantId: intent.participantId, reload: true });
+      return;
+    }
+    trackingInFlight.current = true;
+    setTrackingError(null);
+    startTransition(async () => {
+      try {
+        const result = await paymentTrackingAction(intent);
+        if (result.ok && result.data) { setBill(result.data); return; }
+        if (result.code === "STALE_REVISION" || result.code === "FINALIZATION_CHANGED") {
+          setTrackingError({ message: "Ada perubahan terbaru. Muat ulang dulu.", participantId: intent.participantId, reload: true });
+        } else if (result.code === "INTERNAL_ERROR" || !result.code) {
+          setTrackingError({ message: "Belum tersimpan. Coba lagi.", participantId: intent.participantId, intent });
+        } else {
+          setTrackingError({ message: result.error ?? "Pembayaran belum bisa disimpan. Muat ulang halaman.", participantId: intent.participantId, reload: true });
+        }
+      } catch {
+        setTrackingError({ message: "Belum tersimpan. Coba lagi.", participantId: intent.participantId, intent });
+      } finally { trackingInFlight.current = false; }
+    });
+  };
 
   useEffect(() => {
     if (saveStatus === "saved" || bill.status === "finalized") return;
@@ -657,13 +685,9 @@ export function ResultClient({
 
         {bill.status === "finalized" && billTrackingView(bill) && <PaymentTrackingPanel
           view={billTrackingView(bill)!} people={detailedShares} busy={isPending}
+          error={trackingError ? { ...trackingError, action: trackingError.intent ? () => saveTracking(trackingError.intent!) : trackingError.reload ? () => window.location.reload() : undefined, actionLabel: trackingError.intent ? "Coba lagi" : "Muat ulang" } : null}
           onChange={(participantId, status) => {
-            setActionError(null);
-            runAction(async () => {
-              const result = await paymentTrackingAction({ billId: bill.id, expectedRevision: bill.revision, finalizationId: bill.currentFinalizationId!, ...(participantId ? { participantId, status } : {}) });
-              if (!result.ok || !result.data) { setActionError(result.error ?? "Belum tersimpan. Muat ulang status lalu coba lagi."); return; }
-              setBill(result.data);
-            });
+            saveTracking({ billId: bill.id, expectedRevision: bill.revision, finalizationId: bill.currentFinalizationId!, ...(participantId ? { participantId, status } : {}) });
           }} />}
 
         {bill.status === "finalized" && paymentSection}

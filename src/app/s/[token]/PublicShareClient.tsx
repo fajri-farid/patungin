@@ -106,8 +106,7 @@ export function PublicShareClient({ projection: initialProjection, shareToken }:
           </div>
         </section>
 
-        {refreshError && <p role="alert" className={ui.notice}>{refreshError}</p>}
-        {projection.paymentTracking && <PaymentTrackingPanel view={projection.paymentTracking} people={projection.participants} busy={refreshing} onRefresh={() => {
+        {projection.paymentTracking && <PaymentTrackingPanel view={projection.paymentTracking} people={projection.participants} busy={refreshing} error={refreshError ? { message: refreshError } : null} onRefresh={() => {
           startRefresh(async () => {
             setRefreshError(null);
             try {
