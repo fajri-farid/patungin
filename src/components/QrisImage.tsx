@@ -59,12 +59,13 @@ export function QrisImage({
             <img
               key={retry}
               ref={(node) => {
-                if (
-                  node?.complete &&
-                  node.naturalWidth > 0 &&
-                  loadedSrc !== resolvedSrc
-                ) {
-                  setLoadedSrc(resolvedSrc);
+                // Load/error may finish before hydration attaches the handlers.
+                if (node?.complete) {
+                  if (node.naturalWidth > 0) {
+                    if (loadedSrc !== resolvedSrc) setLoadedSrc(resolvedSrc);
+                  } else if (failedSrc !== resolvedSrc) {
+                    setFailedSrc(resolvedSrc);
+                  }
                 }
               }}
               src={resolvedSrc}
