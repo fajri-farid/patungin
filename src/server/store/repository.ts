@@ -1,3 +1,5 @@
+import { recordOperationalEvent } from "../observability/events";
+import { trackingView, snapshotObligations } from "@/domain/billing/tracking";
 /**
  * Repository Data & Transaksi Atomik Patungin
  *
@@ -649,79 +651,24 @@ export async function getActiveFinalizationForBill(
  * dan mencabut share link aktif secara atomik dalam transaksi yang sama!
  */
 export async function reopenBillToDraft(params: {
-  billId: string;
-  ownerUid: string;
-  expectedRevision: number;
+  billId: string; ownerUid: string; expectedRevision: number;
 }): Promise<BillDocument> {
-  const config = getServerConfig();
-  const now = new Date().toISOString();
-
-  if (config.isDevSandbox) {
-    const db = readDevDb();
-    const current = db.bills[params.billId];
-    if (!current) {
-      throw new AppServiceError(404, "BILL_NOT_FOUND", "Tagihan tidak ditemukan.");
+  return productTransaction(async tx => {
+    const current = await tx.get<BillDocument>("bills", params.billId);
+    if (!current) throw new AppServiceError(404, "BILL_NOT_FOUND", "Tagihan tidak ditemukan.");
+    if (current.ownerUid !== params.ownerUid) throw new AppServiceError(403, "FORBIDDEN", "Akses ditolak.");
+    if (current.revision !== params.expectedRevision) throw new AppServiceError(409, "STALE_REVISION", "Tagihan berubah di tab atau perangkat lain. Muat ulang halaman.");
+    if (current.paymentTracking !== undefined && current.paymentTracking !== null) {
+      const snapshot = current.finalResult ?? (current.currentFinalizationId ? await tx.finalization(current.id, current.currentFinalizationId) : null);
+      const view = snapshot ? trackingView(current.paymentTracking, current.currentFinalizationId ?? "", snapshotObligations(snapshot)) : null;
+      if (!snapshot || snapshot.id !== current.currentFinalizationId || snapshot.billId !== current.id || snapshot.ownerUid !== current.ownerUid || !view || view.state !== "active") throw new AppServiceError(409, "TRACKING_UNAVAILABLE", "Status pembayaran belum bisa dimuat. Muat ulang halaman sebelum mengubah tagihan.");
+      if (view.paidCount) throw new AppServiceError(409, "PAYMENTS_RECORDED", "Ada yang sudah ditandai lunas. Jika itu keliru, hapus centangnya sebelum mengubah tagihan.");
     }
-    if (current.ownerUid !== params.ownerUid) {
-      throw new AppServiceError(403, "FORBIDDEN", "Akses ditolak.");
-    }
-    if (current.revision !== params.expectedRevision) {
-      throw new AppServiceError(
-        409,
-        "STALE_REVISION",
-        "Tagihan berubah di tab atau perangkat lain. Muat ulang halaman."
-      );
-    }
-
-    if (current.activeShareId && db.shares[current.activeShareId]) {
-      db.shares[current.activeShareId].revokedAt = now;
-    }
-
-    const updated: BillDocument = {
-      ...current,
-      status: "draft",
-      revision: current.revision + 1,
-      activeShareId: null,
-      updatedAt: now,
-    };
-    db.bills[params.billId] = updated;
-    writeDevDb(db);
-    return structuredClone(updated);
-  }
-
-  const firestore = getAdminFirestore();
-  const billRef = firestore.collection("bills").doc(params.billId);
-
-  return firestore.runTransaction(async (tx) => {
-    const snap = await tx.get(billRef);
-    if (!snap.exists) {
-      throw new AppServiceError(404, "BILL_NOT_FOUND", "Tagihan tidak ditemukan.");
-    }
-    const current = snap.data() as BillDocument;
-    if (current.ownerUid !== params.ownerUid) {
-      throw new AppServiceError(403, "FORBIDDEN", "Akses ditolak.");
-    }
-    if (current.revision !== params.expectedRevision) {
-      throw new AppServiceError(
-        409,
-        "STALE_REVISION",
-        "Tagihan berubah di tab atau perangkat lain. Muat ulang halaman."
-      );
-    }
-
-    if (current.activeShareId) {
-      const shareRef = firestore.collection("shares").doc(current.activeShareId);
-      tx.update(shareRef, { revokedAt: now });
-    }
-
-    const updated: BillDocument = {
-      ...current,
-      status: "draft",
-      revision: current.revision + 1,
-      activeShareId: null,
-      updatedAt: now,
-    };
-    tx.set(billRef, updated);
+    const share = current.activeShareId ? await tx.get<ShareRecord>("shares", current.activeShareId) : null;
+    const updated: BillDocument = { ...current, status: "draft", revision: current.revision + 1, activeShareId: null, updatedAt: new Date().toISOString() };
+    delete updated.paymentTracking;
+    if (share) tx.set("shares", share.shareId, { ...share, revokedAt: updated.updatedAt });
+    tx.set("bills", current.id, updated);
     return updated;
   });
 }
@@ -1096,6 +1043,8 @@ export async function resolvePublicShareToken(
     finalizedAt: snapshot.finalizedAt, expiresAt: new Date(effectiveExpiry).toISOString(),
   } : { ...structuredClone(share.publicProjection!), expiresAt: new Date(effectiveExpiry).toISOString() };
   if (snapshot?.shareReceiptPhoto) await addPublicPhotoInfo(projection, bill, snapshot.receiptPhotoId);
+  projection.paymentTracking = trackingView(bill.paymentTracking, bill.currentFinalizationId!, projection.participants);
+  if (projection.paymentTracking.state === "unavailable") await recordOperationalEvent({ ownerUid: bill.ownerUid, code: "TRACKING_UNAVAILABLE", stage: "bill", billId: bill.id });
   return projection;
 }
 

@@ -24,6 +24,11 @@ const entry = (
 const manual =
   "Periksa draft. Pengguna dapat melanjutkan dengan pengisian manual.";
 export const DIAGNOSTICS: Record<string, Diagnostic> = {
+  TRACKING_UNAVAILABLE: entry(
+    "PAYMENT_TRACKING_INVALID", "attention", "Catatan pembayaran tidak dapat dibaca",
+    "Struktur catatan atau hubungan finalisasi tidak sesuai. Status lunas tidak ditampilkan sebagai data valid.",
+    "Periksa integritas catatan tagihan. Jangan mereset pembayaran pengguna secara otomatis.",
+  ),
   EXTRACTION_CURRENCY_UNSUPPORTED: entry(
     "INVALID_EXTRACTION", "attention", "Mata uang struk belum didukung",
     "Hasil pembacaan menunjukkan mata uang selain rupiah.",

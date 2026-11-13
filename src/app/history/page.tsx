@@ -1,3 +1,4 @@
+import { billTrackingView, trackingLabel } from "@/domain/billing/tracking";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -110,6 +111,7 @@ export default async function HistoryPage({
                             : formatRupiah(bill.confirmedGrandTotal)}
                         </span>
                       </div>
+                      <p className="text-xs font-semibold text-[#4A5B7C]">{trackingLabel(billTrackingView(bill))}</p>
                       <div className={ui.billMetadata}>
                         <span
                           className={`${ui.badge} ${

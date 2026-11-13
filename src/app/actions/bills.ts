@@ -13,6 +13,7 @@ import {
 } from "@/server/auth/session";
 import {
   AppServiceError,
+  resolvePublicShareToken,
   createDraftBill,
   deleteBillForOwner,
   finalizeBillOnServer,
@@ -23,6 +24,7 @@ import {
   type SaveBillDraftPatch,
   type ShareRecord,
 } from "@/server/store/repository";
+import { updatePaymentTracking, type TrackingMutation } from "@/server/payments/tracking";
 import { recordOperationalEvent } from "@/server/observability/events";
 import { DIAGNOSTICS } from "@/domain/diagnostics";
 
@@ -218,4 +220,25 @@ export async function deleteBillAction(params: {
   } catch (err) {
     return handleActionError(err);
   }
+}
+
+export async function paymentTrackingAction(params: TrackingMutation): Promise<ActionResponse<BillDocument>> {
+  try {
+    await verifyRequestOrigin();
+    const host = await requireAuthenticatedHost();
+    const bill = await updatePaymentTracking(host.uid, params);
+    revalidatePath(`/bills/${bill.id}/result`);
+    revalidatePath("/app");
+    revalidatePath("/history");
+    return { ok: true, data: bill };
+  } catch (error) { return handleActionError(error); }
+}
+
+export async function refreshPublicShareAction(token: string): Promise<ActionResponse<import("@/domain/billing/types").PublicShareProjection>> {
+  try {
+    await verifyRequestOrigin();
+    if (typeof token !== "string" || token.length > 256) return { ok: false, code: "LINK_UNAVAILABLE", error: "Link sudah tidak tersedia." };
+    const projection = await resolvePublicShareToken(token);
+    return projection ? { ok: true, data: projection } : { ok: false, code: "LINK_UNAVAILABLE", error: "Link sudah tidak tersedia." };
+  } catch { return { ok: false, code: "REFRESH_FAILED", error: "Belum bisa memuat status terbaru. Periksa koneksi lalu coba lagi." }; }
 }
