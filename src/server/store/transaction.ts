@@ -1,3 +1,4 @@
+import type { FinalizationSnapshot } from "@/domain/billing/types";
 import { getAdminFirestore } from "../firebase/admin";
 import type { Transaction } from "@google-cloud/firestore";
 import { getServerConfig } from "../config/env";
@@ -6,8 +7,15 @@ import type { QrisImageRecord } from "@/domain/qris";
 
 type Collection = keyof DevDatabaseSchema;
 export interface ProductTransaction {
+  finalization(
+    billId: string,
+    id: string,
+  ): Promise<FinalizationSnapshot | null>;
   get<T>(collection: Collection, id: string): Promise<T | null>;
-  activeQrisImages(ownerUid: string, maximum: number): Promise<QrisImageRecord[]>;
+  activeQrisImages(
+    ownerUid: string,
+    maximum: number,
+  ): Promise<QrisImageRecord[]>;
   set(collection: Collection, id: string, value: object): void;
   delete(collection: Collection, id: string): void;
 }
@@ -17,9 +25,16 @@ export function firestoreProductTransaction(
 ): ProductTransaction {
   const db = getAdminFirestore();
   return {
+    async finalization(billId, id) {
+      const snap = await tx.get(
+        db.collection("bills").doc(billId).collection("finalizations").doc(id),
+      );
+      return snap.exists ? (snap.data() as FinalizationSnapshot) : null;
+    },
     async activeQrisImages(ownerUid, maximum) {
       const snapshot = await tx.get(
-        db.collection("qrisImages")
+        db
+          .collection("qrisImages")
           .where("ownerUid", "==", ownerUid)
           .where("status", "in", ["uploading", "ready", "cleanup_pending"])
           .limit(maximum),
@@ -45,19 +60,25 @@ export async function productTransaction<T>(
 ): Promise<T> {
   if (!getServerConfig().isDevSandbox) {
     const db = getAdminFirestore();
-    return db.runTransaction((tx) =>
-      callback(firestoreProductTransaction(tx)),
-    );
+    return db.runTransaction((tx) => callback(firestoreProductTransaction(tx)));
   }
   const run = sandboxQueue.then(async () => {
     const db = readDevDb();
     const writes: Array<() => void> = [];
     const result = await callback({
+      async finalization(billId, id) {
+        if (writes.length) throw new Error("Reads must precede writes");
+        const snapshot = db.finalizations[id];
+        return snapshot?.billId === billId ? structuredClone(snapshot) : null;
+      },
       async activeQrisImages(ownerUid, maximum) {
         if (writes.length) throw new Error("Reads must precede writes");
         return structuredClone(
           Object.values(db.qrisImages)
-            .filter((asset) => asset.ownerUid === ownerUid && asset.status !== "deleted")
+            .filter(
+              (asset) =>
+                asset.ownerUid === ownerUid && asset.status !== "deleted",
+            )
             .slice(0, maximum),
         );
       },

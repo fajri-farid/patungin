@@ -4,7 +4,7 @@
   <img src="public/patungin.png" alt="Patungin — Bagi tagihan makan sesuai pesanan" width="240" />
 </p>
 
-![Patungin 1.1.3](https://img.shields.io/badge/Patungin-1.1.3-2855D9?style=flat-square)
+![Patungin 1.2.0](https://img.shields.io/badge/Patungin-1.2.0-2855D9?style=flat-square)
 ![Next.js 16.4.6](https://img.shields.io/badge/Next.js-16.4.6-000000?style=flat-square&logo=nextdotjs&logoColor=white)
 ![React 19.3.1](https://img.shields.io/badge/React-19.3.1-149ECA?style=flat-square&logo=react&logoColor=white)
 ![TypeScript 5.9.3](https://img.shields.io/badge/TypeScript-5.9.3-3178C6?style=flat-square&logo=typescript&logoColor=white)
@@ -22,7 +22,7 @@ Pembuat tagihan masuk dengan akun Google. Teman yang menerima link bisa langsung
 
 ## Versi saat ini
 
-**1.1.3** merupakan pembaruan pemeliharaan dari 1.1.2 untuk memperbarui Next.js, React, autentikasi, Firebase, ikon, Tailwind, dan Vitest. Override keamanan gRPC disesuaikan dengan versi Firestore yang baru; patch kompatibilitas Firebase Admin tetap dipertahankan. Node.js tetap 24.x dan pnpm tetap 12.10.1.
+**1.2.0** menambahkan catatan pembayaran manual oleh pemilik tagihan, ringkasan uang diterima dan sisa, serta status baca saja pada link rincian. Pembaruan dependency dan OCR dari 1.1.3 tetap dipertahankan. Node.js tetap 24.x dan pnpm tetap 12.10.1.
 
 Perbaikan OCR, review diskon ambigu, dan validasi gambar sebelum pemakaian kuota dari versi 1.1.2 tetap berlaku. Hasil pembacaan AI tetap perlu diperiksa pengguna.
 
@@ -38,6 +38,14 @@ Versi aplikasi mengacu pada `version` di [package.json](package.json). Rincian p
 - **Lanjutkan nanti.** Simpan tagihan yang belum selesai dan lihat tagihan sebelumnya di halaman riwayat.
 
 Satu tagihan mendukung hingga **30 orang**, **100 baris pesanan**, dan **10 tujuan pembayaran**.
+
+## Catatan pembayaran manual
+
+Pada tagihan final, pilih **Mulai tandai pembayaran**. Centang nama peserta setelah pembayarannya diterima. Untuk membetulkan catatan, lepas centang dan konfirmasi pembatalannya. Bagian penalang sendiri dan peserta tanpa kewajiban transfer tidak masuk jumlah peserta yang ditagih.
+
+Pencatatan bersifat manual dan bukan verifikasi bank. Tagihan lama tidak otomatis dianggap belum dibayar. Status dapat dilihat semua pemegang link yang valid; mereka dapat memakai **Perbarui status** tanpa hak edit. Pembayaran tunai juga dapat dicatat setelah diterima.
+
+Tagihan dengan status lunas harus ditinjau dan catatannya dibatalkan terlebih dahulu sebelum diedit. Reopen mereset pencatatan dan mencabut link lama; setelah finalisasi ulang, mulai pencatatan lagi. Penghapusan tagihan juga menghapus catatan. Pembayaran sebagian, pengingat, dan integrasi bank belum tersedia.
 
 ## Cara pakai
 

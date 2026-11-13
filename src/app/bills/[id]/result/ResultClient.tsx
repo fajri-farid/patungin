@@ -1,5 +1,8 @@
 "use client";
 
+import { PaymentTrackingPanel } from "@/components/PaymentTrackingPanel";
+import { billTrackingView, participantPaymentLabel } from "@/domain/billing/tracking";
+import { paymentTrackingAction } from "@/app/actions/bills";
 import React, {
   useMemo,
   useRef,
@@ -97,7 +100,7 @@ export function ResultClient({
   initialPhoto,
   photoSharingEnabled,
 }: ResultClientProps) {
-  const [bill, setBill] = useState<BillDocument>(initialBill);
+  const [bill, setBill] = useState<BillDocument>({ ...initialBill, ...(initialSnapshot && initialSnapshot.id === initialBill.currentFinalizationId ? { finalResult: initialSnapshot } : {}) });
   const [photoInfo, setPhotoInfo] = useState(initialPhoto);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [pickerBusy, setPickerBusy] = useState(false);
@@ -389,9 +392,11 @@ export function ResultClient({
   };
 
   const handleReopenToEdit = () => {
+    const tracking = billTrackingView(bill);
+    if (tracking?.paidCount) { setActionError("Ada yang sudah ditandai lunas. Jika itu keliru, hapus centangnya sebelum mengubah tagihan."); return; }
     if (
       !window.confirm(
-        "Ubah tagihan ini? Link yang sudah dibagikan akan dinonaktifkan.",
+        "Ubah tagihan ini? Status pembayaran akan dikosongkan dan link lama tidak bisa dibuka lagi.",
       )
     ) {
       return;
@@ -618,6 +623,17 @@ export function ResultClient({
           )}
         </section>
 
+        {bill.status === "finalized" && billTrackingView(bill) && <PaymentTrackingPanel
+          view={billTrackingView(bill)!} people={detailedShares} busy={isPending}
+          onChange={(participantId, status) => {
+            setActionError(null);
+            runAction(async () => {
+              const result = await paymentTrackingAction({ billId: bill.id, expectedRevision: bill.revision, finalizationId: bill.currentFinalizationId!, ...(participantId ? { participantId, status } : {}) });
+              if (!result.ok || !result.data) { setActionError(result.error ?? "Belum tersimpan. Muat ulang status lalu coba lagi."); return; }
+              setBill(result.data);
+            });
+          }} />}
+
         {bill.status === "finalized" && (
           /* Salin Pesan Teks (WhatsApp / Chat) */
           <section
@@ -761,7 +777,7 @@ export function ResultClient({
                             : formatRupiah(person.transferToPayerAmount)}
                         </span>
                         <span className="text-[10px] font-bold text-[#7687A6]">
-                          {person.isPayer ? "Bagian sendiri" : "Perlu dibayar"}
+                          {bill.status === "finalized" ? participantPaymentLabel(billTrackingView(bill), person, true) : person.isPayer ? "Bagian sendiri" : "Bagian bayar"}
                         </span>
                       </div>
                       {isOpen ? (

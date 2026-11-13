@@ -200,6 +200,7 @@ export interface PaymentMethodNote {
 }
 
 export interface BillDocument {
+  paymentTracking?: import("./tracking").PaymentTracking;
   receiptPhotoId?: string | null;
   receiptPhotoUploadId?: string | null;
   shareReceiptPhoto?: boolean;
@@ -262,6 +263,7 @@ export interface ReceiptDetails {
 }
 
 export interface PublicShareProjection {
+  paymentTracking?: import("./tracking").TrackingView;
   receiptPhoto?: import("../receipts").ReceiptPhotoInfo;
   shareId: string;
   billId: string;

@@ -64,7 +64,7 @@ export function DashboardClient({
   function handleDeleteBill(bill: BillSummary) {
     if (
       !window.confirm(
-        `Hapus tagihan “${bill.title}”? Tagihan tidak bisa dikembalikan. Link yang sudah dibagikan juga tidak bisa dibuka lagi.`,
+        `Hapus tagihan “${bill.title}”? Tagihan dan catatan pembayarannya tidak bisa dikembalikan. Link yang sudah dibagikan juga tidak bisa dibuka lagi.`,
       )
     )
       return;
@@ -199,6 +199,7 @@ export function DashboardClient({
                             : formatRupiah(bill.confirmedGrandTotal)}
                         </span>
                       </div>
+                      {bill.paymentTrackingLabel && <p className="text-xs font-semibold text-[#4A5B7C]">{bill.paymentTrackingLabel}</p>}
                       <div className={ui.billMetadata}>
                         <span
                           className={`${ui.badge} ${

@@ -1,6 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import { PaymentTrackingPanel } from "@/components/PaymentTrackingPanel";
+import { participantPaymentLabel } from "@/domain/billing/tracking";
+import { refreshPublicShareAction } from "@/app/actions/bills";
+import React, { useState, useTransition } from "react";
 import { ReceiptPhoto } from "@/components/ReceiptPhoto";
 import { CheckCircle2, ReceiptText, User, Users, Wallet } from "lucide-react";
 import { formatRupiah } from "@/domain/billing/money";
@@ -18,7 +21,11 @@ interface PublicShareClientProps {
   projection: PublicShareProjection;
 }
 
-export function PublicShareClient({ projection, shareToken }: PublicShareClientProps) {
+export function PublicShareClient({ projection: initialProjection, shareToken }: PublicShareClientProps) {
+  const [projection, setProjection] = useState(initialProjection);
+  const [refreshing, startRefresh] = useTransition();
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
   const [selectedPersonId, setSelectedPersonId] = useState<
     string | null | undefined
   >(
@@ -40,6 +47,8 @@ export function PublicShareClient({ projection, shareToken }: PublicShareClientP
       : selectedPersonId
         ? projection.participants.filter((p) => p.id === selectedPersonId)
         : projection.participants;
+
+  if (unavailable) return <main className={ui.main}><h1 className={ui.sectionTitle}>Link sudah tidak tersedia.</h1><p>Minta link baru ke pembuat tagihan.</p></main>;
 
   return (
     <div className={ui.page}>
@@ -96,6 +105,19 @@ export function PublicShareClient({ projection, shareToken }: PublicShareClientP
             </span>
           </div>
         </section>
+
+        {refreshError && <p role="alert" className={ui.notice}>{refreshError}</p>}
+        {projection.paymentTracking && <PaymentTrackingPanel view={projection.paymentTracking} people={projection.participants} busy={refreshing} onRefresh={() => {
+          startRefresh(async () => {
+            setRefreshError(null);
+            try {
+              const result = await refreshPublicShareAction(shareToken);
+              if (result.ok && result.data) setProjection(result.data);
+              else if (result.code === "LINK_UNAVAILABLE") setUnavailable(true);
+              else setRefreshError(result.error ?? "Belum bisa memuat status terbaru. Coba lagi.");
+            } catch { setRefreshError("Belum bisa memuat status terbaru. Periksa koneksi lalu coba lagi."); }
+          });
+        }} />}
 
         {/* Filter Cepat Teman & Daftar Bagian (Dibungkus dalam Wrapper Rapi) */}
         {projection.receiptPhoto && <section className={`${ui.panel} space-y-3`}>
@@ -208,7 +230,7 @@ export function PublicShareClient({ projection, shareToken }: PublicShareClientP
                           : formatRupiah(person.transferToPayerAmount)}
                       </span>
                       <span className="text-[10px] font-bold text-[#7687A6]">
-                        {person.isPayer ? "Bagian sendiri" : "Jumlah bayar"}
+                        {participantPaymentLabel(projection.paymentTracking, person, true)}
                       </span>
                     </div>
                   </div>
@@ -284,8 +306,7 @@ export function PublicShareClient({ projection, shareToken }: PublicShareClientP
             />
           ) : (
             <p className={ui.muted}>
-              Hubungi {projection.payerName} untuk nomor rekening atau cara
-              membayar.
+              Minta nomor rekening atau QRIS ke {projection.payerName}.
             </p>
           )}
         </section>
