@@ -222,7 +222,7 @@ export function ResultClient({
         title: bill.title,
         merchant: bill.merchant,
         grandTotal: calc.computedGrandTotal,
-        payerName: payer?.name ?? "Pembayar",
+        payerName: payer?.name ?? "Yang bayar duluan",
         participants: detailedShares,
         paymentMethods: savedPaymentMethods,
         shareUrl,
@@ -480,7 +480,7 @@ export function ResultClient({
     <ResultPaymentMethods
       finalized={bill.status === "finalized"}
       payments={bill.status === "finalized" ? savedPaymentMethods : paymentMethods}
-      payerName={payer?.name ?? "pembayar"}
+      payerName={payer?.name ?? "yang bayar duluan"}
       busy={isPending || photoBusy || pickerBusy}
       saveStatus={saveStatus}
       error={paymentError}
@@ -656,7 +656,7 @@ export function ResultClient({
             </div>
             <div className="text-right">
               <span className="text-[#4A5B7C] block">
-                Teman perlu bayar ke {payer?.name ?? "pembayar"}
+                Teman perlu bayar ke {payer?.name ?? "yang bayar duluan"}
               </span>
               <span className="font-extrabold text-[#2855D9] text-sm tabular-money mt-0.5 block">
                 {formatRupiah(calc.totalReceivableByPayer)}
@@ -811,14 +811,14 @@ export function ResultClient({
                           </span>
                           {person.isPayer && (
                             <span className="shrink-0 whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#17233B] text-white">
-                              Pembayar
+                              Yang bayar duluan
                             </span>
                           )}
                         </div>
                         <p className="text-xs text-[#4A5B7C]">
                           {person.isPayer
                             ? "Sudah membayar tagihan lebih dulu"
-                            : `Bayar ke ${payer?.name ?? "pembayar"}`}
+                            : `Bayar ke ${payer?.name ?? "yang bayar duluan"}`}
                         </p>
                       </div>
                     </div>

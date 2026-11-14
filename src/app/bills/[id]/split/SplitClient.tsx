@@ -20,6 +20,7 @@ import {
 } from "@/domain/billing/calculation";
 import { ActionBar } from "@/components/product/ActionBar";
 import ui from "@/components/product/product.module.css";
+import guidance from "@/components/product/split-guidance.module.css";
 import { formatRupiah } from "@/domain/billing/money";
 import {
   MAX_PARTICIPANTS_COUNT,
@@ -79,6 +80,10 @@ export function SplitClient({ initialBill }: SplitClientProps) {
   const [newParticipantLabel, setNewParticipantLabel] = useState("");
   const [showPayerSelector, setShowPayerSelector] = useState(false);
   const [filterMode, setFilterMode] = useState<"all" | "unallocated">("all");
+  const [focusRequest, setFocusRequest] = useState(0);
+  const handledFocusRequest = useRef(0);
+  const itemButtons = useRef(new Map<string, HTMLButtonElement>());
+  const itemsHeading = useRef<HTMLHeadingElement>(null);
   const [activeSheetItemId, setActiveSheetItemId] = useState<string | null>(
     null,
   );
@@ -149,10 +154,26 @@ export function SplitClient({ initialBill }: SplitClientProps) {
     filterMode === "unallocated" ? unallocatedItems : bill.items;
 
   const allocatedCount = bill.items.length - unallocatedItems.length;
+  useEffect(() => {
+    if (focusRequest === handledFocusRequest.current) return;
+    handledFocusRequest.current = focusRequest;
+    const first = unallocatedItems[0];
+    const target = (first && itemButtons.current.get(first.id)) || itemsHeading.current;
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView({
+      block: "center",
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+    });
+  }, [focusRequest, unallocatedItems]);
+
+  const showUnallocatedItems = () => {
+    setFilterMode("unallocated");
+    setFocusRequest((request) => request + 1);
+  };
   const progressPct =
     bill.items.length > 0
       ? Math.round((allocatedCount / bill.items.length) * 100)
-      : 100;
+      : 0;
 
   // Tutup bottom sheet dengan tombol Escape
   useEffect(() => {
@@ -484,7 +505,7 @@ export function SplitClient({ initialBill }: SplitClientProps) {
                   aria-hidden="true"
                 />
                 <span className="text-[#4A5B7C] font-medium">
-                  Siapa yang bayar dulu?
+                  Yang bayar duluan
                 </span>
                 <span className="font-extrabold text-[#17233B]">
                   {payerIdentity?.displayLabel ?? "Belum dipilih"}
@@ -497,7 +518,7 @@ export function SplitClient({ initialBill }: SplitClientProps) {
                   onClick={() => setShowPayerSelector((v) => !v)}
                   className="min-h-[44px] px-2.5 py-1 rounded-lg bg-white border border-[#D8E2F2] text-xs font-bold text-[#2855D9] hover:bg-[#E6EDFF] cursor-pointer transition-colors"
                 >
-                  {showPayerSelector ? "Tutup pilihan" : "Ganti pembayar"}
+                  {showPayerSelector ? "Tutup pilihan" : "Ganti yang bayar duluan"}
                 </button>
               )}
             </div>
@@ -546,7 +567,7 @@ export function SplitClient({ initialBill }: SplitClientProps) {
                   <HandPlatter className="w-4 h-4" aria-hidden="true" />
                 </span>
                 <div>
-                  <h2 className={ui.sectionTitle}>Pilih siapa pesan apa</h2>
+                  <h2 ref={itemsHeading} tabIndex={-1} className={`${ui.sectionTitle} ${guidance.target}`}>Pilih siapa pesan apa</h2>
                   <p className="text-xs text-[#4A5B7C]">
                     Ketuk kartu pesanan di bawah untuk memilih siapa yang pesan.
                   </p>
@@ -575,7 +596,7 @@ export function SplitClient({ initialBill }: SplitClientProps) {
                         aria-hidden="true"
                       />
                       <span className="text-[#146346]">
-                        Semua pesanan sudah dibagi.
+                        {bill.items.length ? "Semua pesanan sudah dibagi." : "Belum ada pesanan."}
                       </span>
                     </>
                   ) : (
@@ -604,6 +625,15 @@ export function SplitClient({ initialBill }: SplitClientProps) {
                 />
               </div>
             </div>
+
+            {unallocatedItems.length > 0 && !isLockedFinal && (
+              <div className={guidance.notice}>
+                <p>Masih ada <strong>{unallocatedItems.length} pesanan</strong> yang belum dibagi</p>
+                <button type="button" className={guidance.action} aria-controls="allocation-items" onClick={showUnallocatedItems}>
+                  Lihat pesanan <ChevronRight size={16} aria-hidden="true" />
+                </button>
+              </div>
+            )}
 
             {/* Kontrol Filter & Bagi Rata Semua */}
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -648,7 +678,7 @@ export function SplitClient({ initialBill }: SplitClientProps) {
           </div>
 
           {/* Daftar Kartu Item ("Struk yang Sudah Diberi Pemilik") */}
-          <div className="space-y-2.5">
+          <div id="allocation-items" className="space-y-2.5">
             {filteredItems.length === 0 ? (
               <div className="bg-[#F4F7FC] border border-dashed border-[#D8E2F2] rounded-2xl p-6 text-center space-y-1.5">
                 <CheckCircle2
@@ -656,11 +686,10 @@ export function SplitClient({ initialBill }: SplitClientProps) {
                   aria-hidden="true"
                 />
                 <p className="text-sm font-bold text-[#146346]">
-                  Semua pesanan sudah dibagi.
+                  {bill.items.length ? "Semua pesanan sudah dibagi." : "Belum ada pesanan."}
                 </p>
                 <p className="text-xs text-[#4A5B7C]">
-                  Lanjutkan ke halaman hasil untuk menyalin pesan atau membuat
-                  link.
+                  {bill.items.length ? "Lanjutkan ke halaman hasil untuk menyalin pesan atau membuat link." : "Tambahkan pesanan di halaman Cek struk."}
                 </p>
               </div>
             ) : (
@@ -675,6 +704,10 @@ export function SplitClient({ initialBill }: SplitClientProps) {
                 return (
                   <button
                     key={item.id}
+                    ref={(node) => {
+                      if (node) itemButtons.current.set(item.id, node);
+                      else itemButtons.current.delete(item.id);
+                    }}
                     type="button"
                     disabled={isLockedFinal}
                     aria-label={`Bagi pesanan ${item.name}`}
@@ -683,7 +716,7 @@ export function SplitClient({ initialBill }: SplitClientProps) {
                         setActiveSheetItemId(item.id);
                       }
                     }}
-                    className={`w-full text-left rounded-2xl p-3.5 sm:p-4 border transition-colors cursor-pointer space-y-3 ${
+                    className={`${guidance.target} w-full text-left rounded-2xl p-3.5 sm:p-4 border transition-colors cursor-pointer space-y-3 ${
                       isComplete
                         ? "bg-[#F4F7FC] border-[#D8E2F2] hover:border-[#2855D9]"
                         : "border-2 border-[#F5CA86] bg-[#FFF3E6]/40 hover:border-[#9A4A12]"
@@ -1144,7 +1177,9 @@ export function SplitClient({ initialBill }: SplitClientProps) {
 
       <ActionBar
         title={
-          unallocatedItems.length === 0
+          bill.items.length === 0
+            ? "Tambahkan pesanan dulu"
+            : unallocatedItems.length === 0
             ? "Semua pesanan sudah dibagi"
             : unallocatedItems.length + " pesanan belum dibagi"
         }

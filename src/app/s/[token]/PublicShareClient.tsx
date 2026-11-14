@@ -206,7 +206,7 @@ export function PublicShareClient({ projection: initialProjection, shareToken }:
                           </h2>
                           {person.isPayer && (
                             <span className="shrink-0 whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#17233B] text-white">
-                              Pembayar
+                              Yang bayar duluan
                             </span>
                           )}
                         </div>
