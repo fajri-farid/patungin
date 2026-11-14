@@ -1,0 +1,11 @@
+.next/
+out/
+build/
+output/
+node_modules/
+pnpm-lock.yaml
+patches/
+.playwright-cli/
+next-env.d.ts
+tsconfig.tsbuildinfo
+
