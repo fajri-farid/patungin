@@ -1,0 +1,39 @@
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 12px;
+  border: 1px solid #f5ca86;
+  border-radius: 12px;
+  background: #fff8f0;
+  color: #864413;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.notice p { margin: 0; }
+.action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid #9a4a12;
+  border-radius: 9px;
+  background: white;
+  color: #864413;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.action:hover { background: #fff0de; }
+.action:focus-visible,
+.target:focus {
+  outline: 3px solid #2855d9;
+  outline-offset: 3px;
+}
+.target {
+  scroll-margin-block: 10rem 8rem;
+}

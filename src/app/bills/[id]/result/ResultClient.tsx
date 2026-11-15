@@ -3,6 +3,7 @@
 import { PaymentTrackingPanel } from "@/components/PaymentTrackingPanel";
 import { billTrackingView, participantPaymentLabel } from "@/domain/billing/tracking";
 import { paymentTrackingAction } from "@/app/actions/bills";
+import type { TrackingMutation } from "@/server/payments/tracking";
 import React, {
   useMemo,
   useRef,
@@ -11,7 +12,7 @@ import React, {
   useEffect,
 } from "react";
 import Link from "next/link";
-import { SavedPaymentPicker } from "@/components/SavedPaymentPicker";
+import { ResultPaymentMethods } from "@/components/ResultPaymentMethods";
 import { OwnerReceiptPhoto } from "@/components/OwnerReceiptPhoto";
 import { usePhotoAvailable } from "@/components/ReceiptPhoto";
 import { loadReceiptState } from "@/lib/receipt-photo-client";
@@ -19,7 +20,6 @@ import type { ReceiptPhotoInfo } from "@/domain/receipts";
 import {
   AlertTriangle,
   Check,
-  CheckCircle2,
   ChevronDown,
   ChevronUp,
   Copy,
@@ -31,7 +31,6 @@ import {
   QrCode,
   Share2,
   Users,
-  Wallet,
 } from "lucide-react";
 import {
   finalizeBillAction,
@@ -68,10 +67,6 @@ import {
 } from "@/components/StepHeader";
 import { ReceiptDetails } from "@/components/ReceiptDetails";
 import {
-  PaymentMethodsEditor,
-  PaymentMethodsList,
-} from "@/components/PaymentMethods";
-import {
   editablePaymentMethod,
   normalizePaymentMethods,
 } from "@/domain/billing/payment";
@@ -106,7 +101,7 @@ export function ResultClient({
   const [pickerBusy, setPickerBusy] = useState(false);
   const [shareReceiptPhoto, setShareReceiptPhoto] = useState(initialBill.shareReceiptPhoto === true);
   const photoAvailable = usePhotoAvailable(photoInfo) && !!bill.receiptPhotoId;
-  const [, setSnapshot] = useState<FinalizationSnapshot | null>(
+  const [snapshot, setSnapshot] = useState<FinalizationSnapshot | null>(
     initialSnapshot,
   );
   const [shareToken, setShareToken] = useState<string | null>(
@@ -115,7 +110,7 @@ export function ResultClient({
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
   const [isPending, startTransition] = useTransition();
 
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodNote[]>(
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodNote[]>(() =>
     normalizePaymentMethods(
       initialBill.paymentMethods,
       initialBill.paymentNote,
@@ -131,6 +126,33 @@ export function ResultClient({
   const [actionError, setActionError] = useState<string | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
   const paymentSaveInFlight = useRef(false);
+  const trackingInFlight = useRef(false);
+  const [trackingError, setTrackingError] = useState<{ message: string; participantId?: string; intent?: TrackingMutation; reload?: boolean } | null>(null);
+
+  const saveTracking = (intent: TrackingMutation) => {
+    if (trackingInFlight.current) return;
+    if (intent.billId !== bill.id || intent.finalizationId !== bill.currentFinalizationId || intent.expectedRevision !== bill.revision) {
+      setTrackingError({ message: "Ada perubahan terbaru. Muat ulang dulu.", participantId: intent.participantId, reload: true });
+      return;
+    }
+    trackingInFlight.current = true;
+    setTrackingError(null);
+    startTransition(async () => {
+      try {
+        const result = await paymentTrackingAction(intent);
+        if (result.ok && result.data) { setBill(result.data); return; }
+        if (result.code === "STALE_REVISION" || result.code === "FINALIZATION_CHANGED") {
+          setTrackingError({ message: "Ada perubahan terbaru. Muat ulang dulu.", participantId: intent.participantId, reload: true });
+        } else if (result.code === "INTERNAL_ERROR" || !result.code) {
+          setTrackingError({ message: "Belum tersimpan. Coba lagi.", participantId: intent.participantId, intent });
+        } else {
+          setTrackingError({ message: result.error ?? "Pembayaran belum bisa disimpan. Muat ulang halaman.", participantId: intent.participantId, reload: true });
+        }
+      } catch {
+        setTrackingError({ message: "Belum tersimpan. Coba lagi.", participantId: intent.participantId, intent });
+      } finally { trackingInFlight.current = false; }
+    });
+  };
 
   useEffect(() => {
     if (saveStatus === "saved" || bill.status === "finalized") return;
@@ -186,6 +208,13 @@ export function ResultClient({
   const shareUrl = shareToken
     ? `${appOrigin.replace(/\/+$/, "")}/s/${shareToken}`
     : null;
+  const savedPaymentMethods = useMemo(() => {
+    // Public sharing also reads the active finalization, including legacy notes.
+    const source = bill.status === "finalized" && snapshot?.id === bill.currentFinalizationId
+      ? snapshot
+      : bill;
+    return normalizePaymentMethods(source.paymentMethods, source.paymentNote);
+  }, [bill, snapshot]);
 
   const summaryText = useMemo(
     () =>
@@ -193,10 +222,9 @@ export function ResultClient({
         title: bill.title,
         merchant: bill.merchant,
         grandTotal: calc.computedGrandTotal,
-        payerName: payer?.name ?? "Pembayar",
+        payerName: payer?.name ?? "Yang bayar duluan",
         participants: detailedShares,
-        paymentMethods: bill.paymentMethods,
-        paymentNote: bill.paymentNote,
+        paymentMethods: savedPaymentMethods,
         shareUrl,
       }),
     [
@@ -205,8 +233,7 @@ export function ResultClient({
       calc.computedGrandTotal,
       payer?.name,
       detailedShares,
-      bill.paymentMethods,
-      bill.paymentNote,
+      savedPaymentMethods,
       shareUrl,
     ],
   );
@@ -412,6 +439,9 @@ export function ResultClient({
         return;
       }
       setBill(res.data);
+      setPaymentMethods(normalizePaymentMethods(res.data.paymentMethods, res.data.paymentNote).map(editablePaymentMethod));
+      setPaymentError(null);
+      setSaveStatus("saved");
       setShareToken(null);
       setShowQr(false);
     });
@@ -445,6 +475,40 @@ export function ResultClient({
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2500);
   };
+
+  const paymentSection = (
+    <ResultPaymentMethods
+      finalized={bill.status === "finalized"}
+      payments={bill.status === "finalized" ? savedPaymentMethods : paymentMethods}
+      payerName={payer?.name ?? "yang bayar duluan"}
+      busy={isPending || photoBusy || pickerBusy}
+      saveStatus={saveStatus}
+      error={paymentError}
+      onPickerBusy={setPickerBusy}
+      onUseSaved={(methods) => {
+        const signature = (method: PaymentMethodNote) => JSON.stringify([method.method, method.qrisImageId, method.bankOrWalletName?.trim(), method.accountNumber?.trim(), method.accountHolderName?.trim(), method.note?.trim() || ""]);
+        const seen = new Set(paymentMethods.map(signature));
+        const additions = methods.filter((method) => {
+          const key = signature(method);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        if (paymentMethods.length + additions.length > 10) {
+          setPaymentError("Maksimal 10 tujuan pembayaran per tagihan.");
+          return;
+        }
+        setPaymentMethods([...paymentMethods, ...additions]);
+        setPaymentError(null);
+        setSaveStatus("idle");
+      }}
+      onChange={(value) => {
+        setPaymentMethods(value);
+        setPaymentError(null);
+        setSaveStatus("idle");
+      }}
+    />
+  );
 
   return (
     <div
@@ -546,7 +610,7 @@ export function ResultClient({
         <section className={`${ui.panel} space-y-4`}>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span
                   className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
                     bill.status === "finalized"
@@ -555,7 +619,7 @@ export function ResultClient({
                   }`}
                 >
                   {bill.status === "finalized"
-                    ? "Selesai"
+                    ? "Siap dibagikan"
                     : "Cek sebelum simpan"}
                 </span>
                 {bill.activeShareId && (
@@ -592,7 +656,7 @@ export function ResultClient({
             </div>
             <div className="text-right">
               <span className="text-[#4A5B7C] block">
-                Teman perlu bayar ke {payer?.name ?? "pembayar"}
+                Teman perlu bayar ke {payer?.name ?? "yang bayar duluan"}
               </span>
               <span className="font-extrabold text-[#2855D9] text-sm tabular-money mt-0.5 block">
                 {formatRupiah(calc.totalReceivableByPayer)}
@@ -602,10 +666,6 @@ export function ResultClient({
 
           {bill.status === "finalized" ? (
             <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-[#D8E2F2]">
-              <span className="text-xs sm:text-sm font-bold text-[#146346] inline-flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
-                Siap dibagikan
-              </span>
               <button
                 type="button"
                 disabled={isPending}
@@ -625,14 +685,12 @@ export function ResultClient({
 
         {bill.status === "finalized" && billTrackingView(bill) && <PaymentTrackingPanel
           view={billTrackingView(bill)!} people={detailedShares} busy={isPending}
+          error={trackingError ? { ...trackingError, action: trackingError.intent ? () => saveTracking(trackingError.intent!) : trackingError.reload ? () => window.location.reload() : undefined, actionLabel: trackingError.intent ? "Coba lagi" : "Muat ulang" } : null}
           onChange={(participantId, status) => {
-            setActionError(null);
-            runAction(async () => {
-              const result = await paymentTrackingAction({ billId: bill.id, expectedRevision: bill.revision, finalizationId: bill.currentFinalizationId!, ...(participantId ? { participantId, status } : {}) });
-              if (!result.ok || !result.data) { setActionError(result.error ?? "Belum tersimpan. Muat ulang status lalu coba lagi."); return; }
-              setBill(result.data);
-            });
+            saveTracking({ billId: bill.id, expectedRevision: bill.revision, finalizationId: bill.currentFinalizationId!, ...(participantId ? { participantId, status } : {}) });
           }} />}
+
+        {bill.status === "finalized" && paymentSection}
 
         {bill.status === "finalized" && (
           /* Salin Pesan Teks (WhatsApp / Chat) */
@@ -753,14 +811,14 @@ export function ResultClient({
                           </span>
                           {person.isPayer && (
                             <span className="shrink-0 whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#17233B] text-white">
-                              Pembayar
+                              Yang bayar duluan
                             </span>
                           )}
                         </div>
                         <p className="text-xs text-[#4A5B7C]">
                           {person.isPayer
                             ? "Sudah membayar tagihan lebih dulu"
-                            : `Bayar ke ${payer?.name ?? "pembayar"}`}
+                            : `Bayar ke ${payer?.name ?? "yang bayar duluan"}`}
                         </p>
                       </div>
                     </div>
@@ -854,68 +912,7 @@ export function ResultClient({
           </div>
         </section>
 
-        {/* Pengaturan / Daftar Tujuan Pembayaran */}
-        <section
-          id="payment-settings"
-          className={`${ui.panel} space-y-3.5 scroll-mt-36`}
-        >
-          <div className="flex items-start gap-2.5 pb-2.5 border-b border-[#D8E2F2]">
-            <span className="w-7 h-7 rounded-lg bg-[#E6EDFF] text-[#2855D9] flex items-center justify-center shrink-0 mt-0.5">
-              <Wallet className="w-4 h-4" aria-hidden="true" />
-            </span>
-            <div>
-              <h2 className={ui.sectionTitle}>
-                {bill.status === "draft"
-                  ? "Tujuan pembayaran (opsional)"
-                  : "Cara bayar"}
-              </h2>
-              {bill.status === "draft" && (
-                <p className="text-xs text-[#4A5B7C] mt-0.5">
-                  Cantumkan rekening, e-wallet, atau QRIS agar teman tahu harus
-                  transfer ke mana.
-                </p>
-              )}
-            </div>
-          </div>
-
-          {paymentError && (
-            <p
-              role="alert"
-              className="rounded-2xl bg-[#FDECEC] border border-[#F5B5B5] p-3 text-xs font-bold text-[#B42318]"
-            >
-              {paymentError}
-            </p>
-          )}
-
-          {bill.status === "draft" && <SavedPaymentPicker disabled={isPending || photoBusy} onBusy={setPickerBusy} onUse={methods => {
-            const current = paymentMethods;
-            const signature = (method: PaymentMethodNote) => JSON.stringify([method.method, method.qrisImageId, method.bankOrWalletName?.trim(), method.accountNumber?.trim(), method.accountHolderName?.trim(), method.note?.trim() || ""]);
-            const seen = new Set(current.map(signature));
-            const additions = methods.filter(method => { const key = signature(method); if (seen.has(key)) return false; seen.add(key); return true; });
-            if (current.length + additions.length > 10) { setPaymentError("Maksimal 10 tujuan pembayaran per tagihan."); return; }
-            setPaymentMethods([...paymentMethods, ...additions]); setPaymentError(null); setSaveStatus("idle");
-          }} />}
-          {bill.status === "draft" ? (
-            <PaymentMethodsEditor
-              value={paymentMethods}
-              disabled={isPending}
-              onChange={(value) => {
-                setPaymentMethods(value);
-                setPaymentError(null);
-                setSaveStatus("idle");
-              }}
-            />
-          ) : paymentMethods.length ? (
-            <PaymentMethodsList
-              payments={paymentMethods}
-              payerName={payer?.name ?? "pembayar"}
-            />
-          ) : (
-            <p className="text-xs text-[#4A5B7C] bg-[#F4F7FC] border border-[#D8E2F2] rounded-2xl p-3.5">
-              Hubungi {payer?.name ?? "pembayar"} untuk cara pembayaran.
-            </p>
-          )}
-        </section>
+        {bill.status === "draft" && paymentSection}
 
         {bill.status === "draft" && photoSharingEnabled && (
           <section
@@ -981,6 +978,9 @@ export function ResultClient({
                   melihat pesanan dan cara bayar. Foto hanya ikut jika dipilih,
                   dan bisa dibuka hingga 24 jam sejak disimpan.
                 </p>
+                <a href="#payment-settings" className="mt-1 inline-flex min-h-11 items-center text-xs font-bold text-[#2855D9] underline">
+                  Lihat cara bayar yang ikut dibagikan
+                </a>
               </div>
             </div>
 

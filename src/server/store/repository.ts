@@ -1035,7 +1035,7 @@ export async function resolvePublicShareToken(
     finalizationVersion: snapshot.versionNumber, calculationVersion: snapshot.calculationVersion,
     title: snapshot.title, merchant: snapshot.merchant, receiptDate: snapshot.receiptDate, currency: snapshot.currency,
     grandTotal: snapshot.calculationResult.computedGrandTotal,
-    payerName: snapshot.inputSnapshot.participants.find(p => p.id === snapshot!.inputSnapshot.payerParticipantId)?.name ?? "Pembayar",
+    payerName: snapshot.inputSnapshot.participants.find(p => p.id === snapshot!.inputSnapshot.payerParticipantId)?.name ?? "Yang bayar duluan",
     totalReceivableByPayer: snapshot.calculationResult.totalReceivableByPayer,
     participants: buildDetailedParticipantShares(snapshot.inputSnapshot, snapshot.calculationResult),
     receiptDetails: buildReceiptDetails(snapshot.inputSnapshot, snapshot.calculationResult),

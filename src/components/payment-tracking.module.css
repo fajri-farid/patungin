@@ -265,6 +265,75 @@
   font-size: 12px;
   line-height: 1.5;
 }
+.feedback {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #efc3b8;
+  border-radius: 12px;
+  background: #fff6f2;
+}
+.rowFeedback {
+  margin: 0 12px 12px;
+}
+.feedbackIcon {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  color: #a63724;
+  background: #fbe4dc;
+}
+.feedbackMessage {
+  margin: 2px 0 0;
+  color: #853526;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.feedbackAction {
+  grid-column: 2;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 9px 13px;
+  border: 1px solid #ce9989;
+  border-radius: 9px;
+  background: #fff;
+  color: #963c28;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.feedbackAction:hover:not(:disabled) {
+  background: #fce7de;
+  border-color: #a63724;
+}
+.feedbackAction:focus-visible {
+  outline: 3px solid #2855d9;
+  outline-offset: 3px;
+}
+.feedbackAction:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+@media (min-width: 560px) {
+  .feedback {
+    grid-template-columns: 26px minmax(0, 1fr) auto;
+    align-items: center;
+  }
+  .feedbackAction {
+    grid-column: 3;
+  }
+}
 @media (max-width: 380px) {
   .row {
     padding: 12px;

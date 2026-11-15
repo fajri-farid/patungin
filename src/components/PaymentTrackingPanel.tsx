@@ -1,7 +1,7 @@
 ﻿"use client";
 
-import { useEffect, useRef } from "react";
-import { Check, CheckCircle2, RefreshCw, Wallet, Clock3 } from "lucide-react";
+import { useEffect, useId, useRef } from "react";
+import { AlertCircle, Check, CheckCircle2, RefreshCw, Wallet, Clock3 } from "lucide-react";
 import {
   trackingLabel,
   type TrackingView,
@@ -35,14 +35,17 @@ export function PaymentTrackingPanel({
   busy = false,
   onChange,
   onRefresh,
+  error,
 }: {
   view: TrackingView;
   people: Person[];
   busy?: boolean;
   onChange?: (participantId?: string, status?: "paid" | "unpaid") => void;
   onRefresh?: () => void;
+  error?: { message: string; participantId?: string; action?: () => void; actionLabel?: string } | null;
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
+  const feedbackId = useId();
   const previousState = useRef(view.state);
   useEffect(() => {
     if (
@@ -64,6 +67,18 @@ export function PaymentTrackingPanel({
   const progress = view.count
     ? Math.round((view.paidCount / view.count) * 100)
     : 0;
+  const feedback = error && (
+    <div id={feedbackId} role="alert" className={`${styles.feedback} ${error.participantId ? styles.rowFeedback : ""}`}>
+      <span className={styles.feedbackIcon} aria-hidden="true"><AlertCircle size={18} /></span>
+      <p className={styles.feedbackMessage}>{error.message}</p>
+      {(error.action || (!onChange && onRefresh)) && (
+        <button type="button" disabled={busy} onClick={error.action ?? onRefresh} className={styles.feedbackAction}>
+          <RefreshCw size={15} aria-hidden="true" />
+          {error.actionLabel ?? "Coba muat ulang"}
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <section
@@ -92,6 +107,7 @@ export function PaymentTrackingPanel({
           <span>Muat ulang</span>
         </button>
       </div>
+      {error && !error.participantId && feedback}
       {view.state === "active" && view.count > 0 ? (
         <>
           <div
@@ -186,6 +202,7 @@ export function PaymentTrackingPanel({
                         checked={paid}
                         disabled={busy}
                         aria-label={`Lunas: ${person.name}`}
+                        aria-describedby={error?.participantId === person.id ? feedbackId : undefined}
                         onChange={(event) => {
                           const nextPaid = event.currentTarget.checked;
                           if (
@@ -215,6 +232,7 @@ export function PaymentTrackingPanel({
                       {content}
                     </div>
                   )}
+                  {error?.participantId === person.id && feedback}
                 </li>
               );
             })}
@@ -266,6 +284,7 @@ export function PaymentTrackingPanel({
                     className={ui.primary}
                     disabled={busy}
                     onClick={() => onChange()}
+                    aria-describedby={error && !error.participantId ? feedbackId : undefined}
                   >
                     {busy ? "Menyiapkan…" : "Mulai tandai pembayaran"}
                   </button>
