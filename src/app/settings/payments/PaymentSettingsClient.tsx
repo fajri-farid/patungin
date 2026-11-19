@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { GuardedLink as Link, NavigationGuard } from "@/components/NavigationGuard";
+import { useConfirmDialog } from "@/components/ConfirmDialog";
 import { paymentEditorChanged } from "@/lib/payment-editor";
 import {
   AlertTriangle,
@@ -53,36 +54,64 @@ export function PaymentSettingsClient({
   const [pending, startTransition] = useTransition();
   const [qrisBusy, setQrisBusy] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
+  const confirm = useConfirmDialog();
 
   const original = editor ? profile.methods.find((method) => method.id === editor.id) : undefined;
   const dirty = paymentEditorChanged(editor, original ? {
     id: original.id, label: original.label, payment: original,
   } : undefined);
 
-  function save(input: PaymentProfileInput) {
-    setError(null);
+  async function submitProfile(
+    input: PaymentProfileInput,
+    options?: { inDialog?: boolean },
+  ): Promise<string | null> {
+    if (!options?.inDialog) setError(null);
     setNotice(null);
+    const response = await savePaymentProfileAction(
+      profile.revision,
+      input,
+    ).catch(() => ({
+      ok: false as const,
+      data: undefined,
+      error: "Periksa koneksi lalu coba simpan lagi.",
+    }));
+    if (!response.ok || !response.data) {
+      const message = response.error ?? "Belum tersimpan.";
+      if (!options?.inDialog) setError(message);
+      return message;
+    }
+    setProfile(response.data);
+    setEditor(null);
+    setError(null);
+    setNotice("Tujuan pembayaran tersimpan.");
+    return null;
+  }
+
+  function save(input: PaymentProfileInput) {
     startTransition(async () => {
-      const response = await savePaymentProfileAction(
-        profile.revision,
-        input,
-      ).catch(() => ({
-        ok: false as const,
-        data: undefined,
-        error: "Periksa koneksi lalu coba simpan lagi.",
-      }));
-      if (!response.ok || !response.data) {
-        setError(response.error ?? "Belum tersimpan.");
-        return;
-      }
-      setProfile(response.data);
-      setEditor(null);
-      setNotice("Tujuan pembayaran tersimpan.");
+      await submitProfile(input);
     });
   }
 
+  async function reloadProfile(options?: { inDialog?: boolean }): Promise<string | null> {
+    const response = await getPaymentProfileAction().catch(() => ({
+      ok: false as const,
+      data: undefined,
+      error: "Periksa koneksi lalu coba lagi.",
+    }));
+    if (response.ok && response.data) {
+      setProfile(response.data);
+      setEditor(null);
+      setError(null);
+      return null;
+    }
+    const message = response.error ?? "Belum bisa memuat pengaturan.";
+    if (!options?.inDialog) setError(message);
+    return message;
+  }
+
   return (
-    <NavigationGuard dirty={dirty} busy={pending || qrisBusy}>
+    <NavigationGuard dirty={dirty} busy={pending || qrisBusy || confirm.busy}>
     <div className={ui.page}>
       <AppHeader email={email} admin={admin} activePage="settings" />
       <main className={ui.main}>
@@ -137,27 +166,20 @@ export function PaymentSettingsClient({
               disabled={pending}
               className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-[#F5B5B5] bg-white px-3 py-1.5 text-xs font-bold text-[#B42318] cursor-pointer"
               onClick={() => {
-                if (
-                  dirty &&
-                  !window.confirm(
-                    "Muat ulang pengaturan? Isian yang belum tersimpan akan dibatalkan.",
-                  )
-                )
+                if (dirty) {
+                  confirm.ask({
+                    title: "Muat ulang halaman ini?",
+                    description:
+                      "Isian tujuan pembayaran yang baru kamu ketik belum disimpan dan akan hilang.",
+                    confirmLabel: "Muat ulang",
+                    pendingLabel: "Memuat…",
+                    tone: "danger",
+                    onConfirm: () => reloadProfile({ inDialog: true }),
+                  });
                   return;
+                }
                 startTransition(async () => {
-                  const response = await getPaymentProfileAction().catch(
-                    () => ({
-                      ok: false as const,
-                      data: undefined,
-                      error: "Periksa koneksi lalu coba lagi.",
-                    }),
-                  );
-                  if (response.ok && response.data) {
-                    setProfile(response.data);
-                    setEditor(null);
-                    setError(null);
-                  } else
-                    setError(response.error ?? "Belum bisa memuat pengaturan.");
+                  await reloadProfile();
                 });
               }}
             >
@@ -302,19 +324,26 @@ export function PaymentSettingsClient({
                         disabled={pending || !!editor}
                         className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-[#D8E2F2] bg-white px-3 py-1.5 text-[#B42318] hover:border-[#F5B5B5] hover:bg-[#FDECEC] disabled:opacity-50 cursor-pointer"
                         onClick={() => {
-                          if (
-                            window.confirm(
-                              "Hapus tujuan pembayaran tersimpan ini? Informasi yang sudah dipakai pada tagihan lama tetap ada.",
-                            )
-                          )
-                            save({
-                              methods: profile.methods.filter(
-                                (saved) => saved.id !== method.id,
+                          confirm.ask({
+                            title: "Hapus tujuan pembayaran ini?",
+                            description:
+                              "Rekening atau QRIS ini akan dihapus dari daftar simpananmu. Tagihan lama yang sudah terlanjur dibagikan tidak ikut berubah.",
+                            confirmLabel: "Ya, hapus",
+                            pendingLabel: "Menghapus…",
+                            tone: "danger",
+                            onConfirm: () =>
+                              submitProfile(
+                                {
+                                  methods: profile.methods.filter(
+                                    (saved) => saved.id !== method.id,
+                                  ),
+                                  defaultMethodId: isDefault
+                                    ? null
+                                    : profile.defaultMethodId,
+                                },
+                                { inDialog: true },
                               ),
-                              defaultMethodId: isDefault
-                                ? null
-                                : profile.defaultMethodId,
-                            });
+                          });
                         }}
                       >
                         <Trash2 size={14} aria-hidden="true" />
@@ -433,11 +462,25 @@ export function PaymentSettingsClient({
                 {pending ? "Menyimpan…" : "Simpan tujuan pembayaran"}
               </button>
               <button
-                disabled={pending || qrisBusy}
                 type="button"
+                disabled={pending || qrisBusy}
                 className={ui.secondary}
                 onClick={() => {
-                  if (!dirty || window.confirm("Buang perubahan tujuan pembayaran yang belum tersimpan?")) setEditor(null);
+                  if (!dirty) {
+                    setEditor(null);
+                    return;
+                  }
+                  confirm.ask({
+                    title: "Buang perubahan?",
+                    description:
+                      "Perubahan pada tujuan pembayaran ini belum disimpan dan akan hilang kalau kamu tutup sekarang.",
+                    confirmLabel: "Buang perubahan",
+                    cancelLabel: "Lanjut edit",
+                    tone: "danger",
+                    onConfirm: () => {
+                      setEditor(null);
+                    },
+                  });
                 }}
               >
                 Batal
@@ -446,6 +489,7 @@ export function PaymentSettingsClient({
           </form>
         )}
       </main>
+      {confirm.dialog}
     </div>
     </NavigationGuard>
   );

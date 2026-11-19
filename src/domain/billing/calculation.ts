@@ -27,7 +27,9 @@ import {
   type BillAdjustment,
   type BillCalculationInput,
   type CalculationResult,
+  type ParticipantAdjustmentShare,
   type ParticipantBreakdown,
+  type ParticipantItemShare,
   type PaymentMethodNote,
   type PublicShareProjection,
   type ReconciliationIssue,
@@ -1082,12 +1084,124 @@ export function buildReceiptDetails(input: BillCalculationInput, result: Calcula
   };
 }
 
-/** Ringkasan singkat siap salin untuk WhatsApp/chat. */
+/** Tingkat rincian pesan WhatsApp/chat yang disalin dari hasil patungan. */
+export type SummaryDetailLevel = "summary" | "itemized";
+
+type SummaryParticipant = PublicShareProjection["participants"][number];
+
+function formatSummaryItemLine(item: ParticipantItemShare): string {
+  if (item.mode === "units") {
+    return `  · ${item.units ?? 1}x ${item.itemName}: ${formatRupiah(item.grossShare)}`;
+  }
+  const sharedCount = item.sharedParticipantCount ?? 1;
+  return `  · ${item.itemName} (bagi ${sharedCount} orang): ${formatRupiah(item.grossShare)}`;
+}
+
+function formatSummaryAdjustmentLine(adj: ParticipantAdjustmentShare): string {
+  if (adj.mode === "included") {
+    return `  · ${adj.name}: ${formatRupiah(adj.absoluteAmount)} (sudah termasuk)`;
+  }
+  const sign = adj.signedAmount < 0 ? "-" : "+";
+  return `  · ${adj.name}: ${sign}${formatRupiah(adj.absoluteAmount)}`;
+}
+
+function formatSummaryParticipantLines(
+  person: SummaryParticipant,
+  detailLevel: SummaryDetailLevel,
+  payerIsHost: boolean,
+): string[] {
+  const name = person.isPayer ? (payerIsHost ? "Aku" : person.name) : person.name;
+  const amount = person.isPayer
+    ? person.consumptionTotal
+    : person.transferToPayerAmount;
+  const status = person.isPayer
+    ? " (sudah dibayar)"
+    : amount === 0
+      ? " (tidak perlu bayar)"
+      : "";
+  const lines = [`- ${name}: *${formatRupiah(amount)}*${status}`];
+
+  if (
+    detailLevel === "itemized" &&
+    (person.items.length > 0 || person.adjustments.length > 0)
+  ) {
+    for (const item of person.items) {
+      lines.push(formatSummaryItemLine(item));
+    }
+    for (const adj of person.adjustments) {
+      lines.push(formatSummaryAdjustmentLine(adj));
+    }
+  }
+
+  return lines;
+}
+
+function formatSummaryPaymentLines(
+  payments: PaymentMethodNote[],
+  payerIsHost: boolean,
+  payerLabel: string,
+  shareUrl?: string | null,
+): string[] {
+  const lines: string[] = [];
+  if (payments.length === 0) {
+    lines.push(
+      "",
+      payerIsHost
+        ? "Bisa transfer ke aku ya."
+        : `Bisa transfer ke *${payerLabel}* ya.`,
+    );
+  }
+  if (payments.length > 1) {
+    lines.push(
+      "",
+      payerIsHost
+        ? "Bisa bayar ke aku lewat salah satu ini:"
+        : `Bisa bayar ke *${payerLabel}* lewat salah satu ini:`,
+    );
+  }
+  for (const payment of payments) {
+    lines.push("");
+    if (payment.method === "qris") {
+      if (payment.qrisImageId && shareUrl) {
+        lines.push(
+          "Bayar lewat *QRIS* ya. Gambar QRIS tersedia di link rincian di bawah.",
+        );
+      } else if (payerIsHost) {
+        lines.push("Bayar lewat *QRIS* ya. Kode QR-nya aku kirim di chat.");
+      } else {
+        lines.push(
+          `Bayar lewat *QRIS* ya. Kode QR-nya minta di chat ke *${payerLabel}* ya.`,
+        );
+      }
+    } else {
+      const accParts = [
+        payment.bankOrWalletName,
+        payment.accountNumber,
+        payment.accountHolderName ? `a.n. ${payment.accountHolderName}` : null,
+      ].filter(Boolean);
+      if (accParts.length > 0) {
+        lines.push(
+          payment.method === "transfer" || !payment.method
+            ? `Transfer ke: *${accParts.join(" · ")}*`
+            : `${paymentMethodLabel(payment)}: *${accParts.join(" · ")}*`,
+        );
+      }
+    }
+    if (payment.note) {
+      lines.push(`Catatan: ${payment.note}`);
+    }
+  }
+  return lines;
+}
+
+/** Ringkasan singkat atau rincian per orang siap salin untuk WhatsApp/chat. */
 export function formatSummaryText(params: {
   title: string;
   merchant?: string;
   grandTotal: number;
   payerName: string;
+  payerIsHost?: boolean;
+  detailLevel?: SummaryDetailLevel;
   participants: PublicShareProjection["participants"];
   paymentNote?: PaymentMethodNote | null;
   paymentMethods?: PaymentMethodNote[];
@@ -1096,44 +1210,35 @@ export function formatSummaryText(params: {
   const title = params.title.trim();
   const isDefaultTitle = !title || /^(patungan baru|patungan makan)$/i.test(title);
   const headerLabel = isDefaultTitle ? params.merchant || "Patungan makan" : title;
+  const payerIsHost = params.payerIsHost ?? true;
+  const payerLabel = params.payerName.trim() || "yang bayar duluan";
+  const detailLevel = params.detailLevel ?? "summary";
   const payments = normalizePaymentMethods(params.paymentMethods, params.paymentNote);
   const lines: string[] = [
     `*${headerLabel}*`,
-    `Total *${formatRupiah(params.grandTotal)}*, sudah aku bayar dulu ya.`,
+    payerIsHost
+      ? `Total *${formatRupiah(params.grandTotal)}*, sudah aku bayar dulu ya.`
+      : `Total *${formatRupiah(params.grandTotal)}*, sudah dibayar dulu sama *${payerLabel}* ya.`,
     "",
   ];
 
-  for (const person of params.participants) {
-    const name = person.isPayer ? "Aku" : person.name;
-    const amount = person.isPayer ? person.consumptionTotal : person.transferToPayerAmount;
-    const status = person.isPayer ? " (sudah dibayar)" : amount === 0 ? " (tidak perlu bayar)" : "";
-    lines.push(`- ${name}: *${formatRupiah(amount)}*${status}`);
+  for (const [index, person] of params.participants.entries()) {
+    lines.push(
+      ...formatSummaryParticipantLines(person, detailLevel, payerIsHost),
+    );
+    if (detailLevel === "itemized" && index < params.participants.length - 1) {
+      lines.push("");
+    }
   }
 
-  if (payments.length === 0) lines.push("", "Bisa transfer ke aku ya.");
-  if (payments.length > 1) lines.push("", "Bisa bayar ke aku lewat salah satu ini:");
-  for (const payment of payments) {
-    lines.push("");
-    if (payment.method === "qris") {
-      lines.push(payment.qrisImageId && params.shareUrl ? "Bayar lewat *QRIS* ya. Gambar QRIS tersedia di link rincian di bawah." : "Bayar lewat *QRIS* ya. Kode QR-nya aku kirim di chat.");
-    } else {
-      const accParts = [
-      payment.bankOrWalletName,
-      payment.accountNumber,
-      payment.accountHolderName
-        ? `a.n. ${payment.accountHolderName}`
-        : null,
-      ].filter(Boolean);
-      if (accParts.length > 0) {
-        lines.push(payment.method === "transfer" || !payment.method
-          ? `Transfer ke: *${accParts.join(" · ")}*`
-          : `${paymentMethodLabel(payment)}: *${accParts.join(" · ")}*`);
-      }
-    }
-    if (payment.note) {
-      lines.push(`Catatan: ${payment.note}`);
-    }
-  }
+  lines.push(
+    ...formatSummaryPaymentLines(
+      payments,
+      payerIsHost,
+      payerLabel,
+      params.shareUrl,
+    ),
+  );
 
   lines.push("");
   lines.push("Makasih ya!");

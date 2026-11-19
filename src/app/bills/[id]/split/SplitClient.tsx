@@ -37,6 +37,7 @@ import {
 } from "@/components/ParticipantBadge";
 import { StepIntro, StepHeader } from "@/components/StepHeader";
 import { useBillDraft } from "@/components/useBillDraft";
+import { useConfirmDialog } from "@/components/ConfirmDialog";
 
 interface SplitClientProps {
   initialBill: BillDocument;
@@ -89,6 +90,7 @@ export function SplitClient({ initialBill }: SplitClientProps) {
   );
 
   const participantSeqRef = useRef<number>(100);
+  const confirm = useConfirmDialog();
 
   const isLockedFinal = bill.status === "finalized";
 
@@ -253,41 +255,53 @@ export function SplitClient({ initialBill }: SplitClientProps) {
   const handleRemoveParticipant = (participantId: string) => {
     if (bill.participants.length <= 1) return;
     const target = bill.participants.find((p) => p.id === participantId);
-    if (
-      !window.confirm(
-        `Hapus "${target?.name}" dari daftar peserta? Pesanan yang sebelumnya dipilih untuk ${target?.name} perlu dibagi ulang.`,
-      )
-    ) {
-      return;
-    }
+    const targetName = target?.name ?? "Teman ini";
+    const isPayer = bill.payerParticipantId === participantId;
+    confirm.ask({
+      title: `Keluarkan ${targetName} dari tagihan?`,
+      description: (
+        <>
+          Pesanan yang tadi dipilih untuk <strong>{targetName}</strong> perlu
+          kamu bagikan ulang nanti.
+          {isPayer
+            ? " Peran yang bayar duluan juga akan dipindah ke teman lain."
+            : ""}
+        </>
+      ),
+      confirmLabel: "Keluarkan",
+      tone: "danger",
+      onConfirm: () => {
+        updateBillState((prev) => {
+          const remaining = prev.participants.filter(
+            (p) => p.id !== participantId,
+          );
+          const nextPayer =
+            prev.payerParticipantId === participantId
+              ? (remaining[0]?.id ?? null)
+              : prev.payerParticipantId;
 
-    updateBillState((prev) => {
-      const remaining = prev.participants.filter((p) => p.id !== participantId);
-      const nextPayer =
-        prev.payerParticipantId === participantId
-          ? (remaining[0]?.id ?? null)
-          : prev.payerParticipantId;
+          const cleanedAllocations = prev.allocations.map((alloc) => {
+            if (alloc.mode === "units") {
+              const nextCounts = { ...(alloc.unitCounts ?? {}) };
+              delete nextCounts[participantId];
+              return { ...alloc, unitCounts: nextCounts };
+            }
+            return {
+              ...alloc,
+              participantIds: (alloc.participantIds ?? []).filter(
+                (id) => id !== participantId,
+              ),
+            };
+          });
 
-      const cleanedAllocations = prev.allocations.map((alloc) => {
-        if (alloc.mode === "units") {
-          const nextCounts = { ...(alloc.unitCounts ?? {}) };
-          delete nextCounts[participantId];
-          return { ...alloc, unitCounts: nextCounts };
-        }
-        return {
-          ...alloc,
-          participantIds: (alloc.participantIds ?? []).filter(
-            (id) => id !== participantId,
-          ),
-        };
-      });
-
-      return {
-        ...prev,
-        participants: remaining,
-        payerParticipantId: nextPayer,
-        allocations: cleanedAllocations,
-      };
+          return {
+            ...prev,
+            participants: remaining,
+            payerParticipantId: nextPayer,
+            allocations: cleanedAllocations,
+          };
+        });
+      },
     });
   };
 
@@ -331,25 +345,35 @@ export function SplitClient({ initialBill }: SplitClientProps) {
   };
 
   const shareAllEqually = () => {
-    if (
-      bill.allocations.some(
-        (allocation) =>
-          allocation.mode === "shared" ||
-          Object.values(allocation.unitCounts ?? {}).some((count) => count > 0),
-      ) &&
-      !window.confirm(
-        "Bagi semua pesanan sama rata ke semua teman? Pembagian sebelumnya akan diganti.",
-      )
-    )
+    const applyEqualShare = () => {
+      updateBillState((current) => ({
+        ...current,
+        allocations: current.items.map((item) => ({
+          itemId: item.id,
+          mode: "shared",
+          participantIds: current.participants.map((person) => person.id),
+        })),
+      }));
+    };
+
+    const hasExistingAllocation = bill.allocations.some(
+      (allocation) =>
+        allocation.mode === "shared" ||
+        Object.values(allocation.unitCounts ?? {}).some((count) => count > 0),
+    );
+    if (!hasExistingAllocation) {
+      applyEqualShare();
       return;
-    updateBillState((current) => ({
-      ...current,
-      allocations: current.items.map((item) => ({
-        itemId: item.id,
-        mode: "shared",
-        participantIds: current.participants.map((person) => person.id),
-      })),
-    }));
+    }
+
+    confirm.ask({
+      title: "Bagi rata semua pesanan?",
+      description:
+        "Semua pesanan di struk akan dibagi sama rata ke semua teman yang ada. Pembagian yang sudah kamu atur sebelumnya akan terganti.",
+      confirmLabel: "Ya, bagi rata",
+      tone: "primary",
+      onConfirm: applyEqualShare,
+    });
   };
 
   const hasDuplicateInputName = bill.participants.some(
@@ -1189,6 +1213,7 @@ export function SplitClient({ initialBill }: SplitClientProps) {
         pending={proceedPending}
         disabled={unallocatedItems.length > 0}
       />
+      {confirm.dialog}
     </div>
   );
 }

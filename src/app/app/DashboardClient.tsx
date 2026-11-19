@@ -17,6 +17,7 @@ import { NewBillClient } from "@/app/bills/new/NewBillClient";
 import { formatRupiah } from "@/domain/billing/money";
 import type { BillSummary } from "@/domain/billing/summary";
 import { AppHeader } from "@/components/product/AppHeader";
+import { useConfirmDialog } from "@/components/ConfirmDialog";
 import ui from "@/components/product/product.module.css";
 
 interface DashboardClientProps {
@@ -55,6 +56,7 @@ export function DashboardClient({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
+  const confirm = useConfirmDialog();
   const bills = initialBills.filter((bill) => !deletedIds.includes(bill.id));
   const latestDraft =
     initialLatestDraft && !deletedIds.includes(initialLatestDraft.id)
@@ -62,32 +64,36 @@ export function DashboardClient({
       : null;
 
   function handleDeleteBill(bill: BillSummary) {
-    if (
-      !window.confirm(
-        `Hapus tagihan “${bill.title}”? Tagihan dan catatan pembayarannya tidak bisa dikembalikan. Link yang sudah dibagikan juga tidak bisa dibuka lagi.`,
-      )
-    )
-      return;
     setErrorBanner(null);
-    setDeletingId(bill.id);
-    startTransition(async () => {
-      try {
-        const response = await deleteBillAction({ billId: bill.id });
-        if (!response.ok) {
-          setErrorBanner(
-            response.error ?? "Tagihan belum terhapus. Coba lagi.",
-          );
-          return;
+    confirm.ask({
+      title: "Hapus tagihan ini?",
+      description: (
+        <>
+          Tagihan <strong>{bill.title}</strong> dan catatan pembayarannya akan
+          dihapus permanen. Link yang sudah dibagikan juga tidak bisa dibuka
+          lagi.
+        </>
+      ),
+      confirmLabel: "Ya, hapus",
+      pendingLabel: "Menghapus…",
+      tone: "danger",
+      onConfirm: async () => {
+        setDeletingId(bill.id);
+        try {
+          const response = await deleteBillAction({ billId: bill.id });
+          if (!response.ok) {
+            return response.error ?? "Tagihan belum terhapus. Coba lagi.";
+          }
+          setDeletedIds((current) => [...current, bill.id]);
+          startTransition(() => {
+            router.refresh();
+          });
+        } catch {
+          return "Tagihan belum terhapus. Periksa koneksi lalu coba lagi.";
+        } finally {
+          setDeletingId(null);
         }
-        setDeletedIds((current) => [...current, bill.id]);
-        router.refresh();
-      } catch {
-        setErrorBanner(
-          "Tagihan belum terhapus. Periksa koneksi lalu coba lagi.",
-        );
-      } finally {
-        setDeletingId(null);
-      }
+      },
     });
   }
 
@@ -228,7 +234,7 @@ export function DashboardClient({
                     <button
                       type="button"
                       onClick={() => handleDeleteBill(bill)}
-                      disabled={isPending}
+                      disabled={isPending || confirm.busy}
                       className={ui.iconButton}
                       aria-label={`Hapus tagihan ${bill.title}`}
                     >
@@ -249,6 +255,7 @@ export function DashboardClient({
           )}
         </section>
       </main>
+      {confirm.dialog}
     </div>
   );
 }

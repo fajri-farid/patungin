@@ -35,6 +35,7 @@ import type {
 import { MoneyInput } from "@/components/MoneyInput";
 import { StepIntro, StepHeader } from "@/components/StepHeader";
 import { OwnerReceiptPhoto } from "@/components/OwnerReceiptPhoto";
+import { useConfirmDialog } from "@/components/ConfirmDialog";
 import type { ReceiptPhotoInfo } from "@/domain/receipts";
 import { useBillDraft } from "@/components/useBillDraft";
 
@@ -67,6 +68,7 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
   >({});
 
   const idSeqRef = useRef<number>(100);
+  const confirm = useConfirmDialog();
 
   // Hitung rekonsiliasi secara langsung dengan mesin hitung domain yang sama dengan server
   const calc = useMemo(
@@ -104,15 +106,32 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
   const scanWarnings = receiptWarningMessages(bill.extractionWarnings ?? []);
 
   const handleMergeItem = (childId: string, parentId: string) => {
-    const parent = bill.items.find(item => item.id === parentId);
-    const child = bill.items.find(item => item.id === childId);
-    if (!parent || !child || !window.confirm(`Gabungkan “${child.name}” ke “${parent.name}”? Total tetap ${formatRupiah(parent.lineAmount)}. Pastikan harga ini sudah termasuk tambahan tersebut.`)) return;
-    const merged = mergeReceiptItem(bill, childId, parentId);
-    if (merged === bill) {
-      setActionError("Pesanan ini sudah dibagi ke teman. Kosongkan pembagiannya sebelum menggabungkan.");
-      return;
-    }
-    updateBillState(() => merged);
+    const parent = bill.items.find((item) => item.id === parentId);
+    const child = bill.items.find((item) => item.id === childId);
+    if (!parent || !child) return;
+    confirm.ask({
+      title: `Gabungkan ke ${parent.name || "pesanan utama"}?`,
+      description: (
+        <>
+          <strong>{child.name || "Tambahan"}</strong> akan digabung ke{" "}
+          <strong>{parent.name || "pesanan utama"}</strong> dengan total tetap{" "}
+          <strong>{formatRupiah(parent.lineAmount)}</strong>. Pastikan harga
+          itu sudah termasuk tambahannya.
+        </>
+      ),
+      confirmLabel: "Ya, gabungkan",
+      tone: "primary",
+      onConfirm: () => {
+        const merged = mergeReceiptItem(bill, childId, parentId);
+        if (merged === bill) {
+          setActionError(
+            "Pesanan ini sudah dibagi ke teman. Kosongkan pembagiannya sebelum menggabungkan.",
+          );
+          return;
+        }
+        updateBillState(() => merged);
+      },
+    });
   };
 
   const handleAddItem = () => {
@@ -152,21 +171,28 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
   const handleRemoveItem = (itemId: string) => {
     if (bill.items.length <= 1) return;
     const item = bill.items.find((entry) => entry.id === itemId);
-    if (
-      !window.confirm(
-        `Hapus pesanan “${item?.name || "Tanpa nama"}”? Pembagiannya juga akan dihapus.`,
-      )
-    )
-      return;
-    updateBillState((prev) => ({
-      ...prev,
-      items: prev.items.filter((i) => i.id !== itemId),
-      allocations: prev.allocations.filter((a) => a.itemId !== itemId),
-      adjustments: prev.adjustments.map((adj) => ({
-        ...adj,
-        eligibleItemIds: adj.eligibleItemIds.filter((id) => id !== itemId),
-      })),
-    }));
+    confirm.ask({
+      title: "Hapus pesanan ini?",
+      description: (
+        <>
+          <strong>{item?.name || "Tanpa nama"}</strong> akan dihapus dari
+          daftar struk, beserta pembagiannya ke teman.
+        </>
+      ),
+      confirmLabel: "Hapus pesanan",
+      tone: "danger",
+      onConfirm: () => {
+        updateBillState((prev) => ({
+          ...prev,
+          items: prev.items.filter((i) => i.id !== itemId),
+          allocations: prev.allocations.filter((a) => a.itemId !== itemId),
+          adjustments: prev.adjustments.map((adj) => ({
+            ...adj,
+            eligibleItemIds: adj.eligibleItemIds.filter((id) => id !== itemId),
+          })),
+        }));
+      },
+    });
   };
 
   const handleAddAdjustmentPreset = (kind: AdjustmentKind) => {
@@ -285,30 +311,30 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
     else setProceedPending(false);
   };
 
-  const handleReopenBill = async () => {
-    if (
-      !window.confirm(
-        "Ubah tagihan ini? Link yang sudah dibagikan akan dinonaktifkan.",
-      )
-    ) {
-      return;
-    }
-    try {
-      const res = await reopenBillAction({
-        billId: bill.id,
-        expectedRevision: bill.revision,
-      });
-      if (!res.ok || !res.data) {
-        setActionError(res.error ?? "Tagihan belum bisa diubah. Coba lagi.");
-        return;
-      }
-      replaceBill(res.data);
-      setActionError(null);
-    } catch {
-      setActionError(
-        "Tagihan belum bisa diubah. Periksa koneksi lalu coba lagi.",
-      );
-    }
+  const handleReopenBill = () => {
+    confirm.ask({
+      title: "Edit tagihan lagi?",
+      description:
+        "Kalau kamu ubah tagihan ini, link yang sudah dibagikan ke teman akan dimatikan dulu sampai kamu selesaikan lagi.",
+      confirmLabel: "Ya, edit tagihan",
+      pendingLabel: "Membuka tagihan…",
+      tone: "danger",
+      onConfirm: async () => {
+        try {
+          const res = await reopenBillAction({
+            billId: bill.id,
+            expectedRevision: bill.revision,
+          });
+          if (!res.ok || !res.data) {
+            return res.error ?? "Tagihan belum bisa diubah. Coba lagi.";
+          }
+          replaceBill(res.data);
+          setActionError(null);
+        } catch {
+          return "Tagihan belum bisa diubah. Periksa koneksi lalu coba lagi.";
+        }
+      },
+    });
   };
 
   const isLockedFinal = bill.status === "finalized";
@@ -1405,6 +1431,7 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
         }
         onClick={handleSaveAndProceedToSplit}
       />
+      {confirm.dialog}
     </div>
   );
 }
