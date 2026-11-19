@@ -18,6 +18,8 @@ import { formatRupiah } from "@/domain/billing/money";
 import type { BillSummary } from "@/domain/billing/summary";
 import { AppHeader } from "@/components/product/AppHeader";
 import { useConfirmDialog } from "@/components/ConfirmDialog";
+import { useToast } from "@/components/ToastProvider";
+import { formatToastName } from "@/lib/toast-store";
 import ui from "@/components/product/product.module.css";
 
 interface DashboardClientProps {
@@ -57,6 +59,7 @@ export function DashboardClient({
   const [isPending, startTransition] = useTransition();
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const confirm = useConfirmDialog();
+  const toast = useToast();
   const bills = initialBills.filter((bill) => !deletedIds.includes(bill.id));
   const latestDraft =
     initialLatestDraft && !deletedIds.includes(initialLatestDraft.id)
@@ -85,14 +88,17 @@ export function DashboardClient({
             return response.error ?? "Tagihan belum terhapus. Coba lagi.";
           }
           setDeletedIds((current) => [...current, bill.id]);
-          startTransition(() => {
-            router.refresh();
-          });
         } catch {
           return "Tagihan belum terhapus. Periksa koneksi lalu coba lagi.";
         } finally {
           setDeletingId(null);
         }
+      },
+      onSuccess: () => {
+        const titleLabel = formatToastName(bill.title, 28);
+        toast.success(
+          titleLabel ? `Tagihan "${titleLabel}" dihapus.` : "Tagihan dihapus.",
+        );
       },
     });
   }

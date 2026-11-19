@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { QrisImage } from "./QrisImage";
+import { useToast } from "./ToastProvider";
 import {
   Check,
   Copy,
@@ -41,6 +42,7 @@ export function PaymentMethodsEditor({
   allowAdd?: boolean;
   renderQris?: (payment: PaymentMethodNote, index: number) => ReactNode;
 }) {
+  const toast = useToast();
   const update = (index: number, patch: Partial<PaymentMethodNote>) => {
     onChange(
       value.map((payment, i) =>
@@ -62,7 +64,12 @@ export function PaymentMethodsEditor({
             </span>
             <button
               type="button"
-              onClick={() => onChange(value.filter((_, i) => i !== index))}
+              onClick={() => {
+                onChange(value.filter((_, i) => i !== index));
+                if (allowAdd) {
+                  toast.info("Tujuan pembayaran dihapus dari daftar.");
+                }
+              }}
               aria-label={`Hapus tujuan pembayaran ${index + 1}`}
               className="w-11 h-11 rounded-xl text-[#B42318] hover:bg-[#FDECEC] inline-flex items-center justify-center cursor-pointer"
             >
@@ -209,14 +216,21 @@ export function PaymentMethodsList({
 }) {
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [copyError, setCopyError] = useState(false);
+  const toast = useToast();
   const copy = async (payment: PaymentMethodNote, index: number) => {
     try {
       await navigator.clipboard.writeText(payment.accountNumber ?? "");
       setCopyError(false);
       setCopiedIndex(index);
+      toast.success(
+        payment.method === "ewallet"
+          ? "Nomor HP disalin."
+          : "Nomor rekening disalin.",
+      );
       setTimeout(() => setCopiedIndex(null), 2500);
     } catch {
       setCopyError(true);
+      toast.error("Nomor belum bisa disalin.");
     }
   };
   if (!payments.length) return null;

@@ -40,6 +40,8 @@ export interface ConfirmRequest {
   tone?: ConfirmTone;
   /** Return an error string to keep the dialog open and offer a retry action. */
   onConfirm: () => void | string | null | Promise<void | string | null>;
+  /** Called right after the dialog closes on a successful confirmation (ideal for toasts). */
+  onSuccess?: () => void;
 }
 
 /** Accessible in-app confirmation modal on desktop and bottom sheet on mobile. */
@@ -282,7 +284,20 @@ export function useConfirmDialog() {
         setError(failureMessage);
         return;
       }
+      const afterSuccess = request.onSuccess;
       setRequest(null);
+      if (afterSuccess) {
+        if (
+          typeof window !== "undefined" &&
+          typeof window.requestAnimationFrame === "function"
+        ) {
+          window.requestAnimationFrame(() => {
+            afterSuccess();
+          });
+        } else {
+          afterSuccess();
+        }
+      }
     } catch (err) {
       setError(
         err instanceof Error && err.message.trim()

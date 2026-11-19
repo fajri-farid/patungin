@@ -3,11 +3,11 @@
 import { useRef, useState, useTransition } from "react";
 import { GuardedLink as Link, NavigationGuard } from "@/components/NavigationGuard";
 import { useConfirmDialog } from "@/components/ConfirmDialog";
+import { useToast } from "@/components/ToastProvider";
 import { paymentEditorChanged } from "@/lib/payment-editor";
 import {
   AlertTriangle,
   ArrowLeft,
-  CheckCircle2,
   Landmark,
   Loader2,
   Pencil,
@@ -50,11 +50,11 @@ export function PaymentSettingsClient({
     payment: PaymentMethodNote;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [qrisBusy, setQrisBusy] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const confirm = useConfirmDialog();
+  const toast = useToast();
 
   const original = editor ? profile.methods.find((method) => method.id === editor.id) : undefined;
   const dirty = paymentEditorChanged(editor, original ? {
@@ -63,10 +63,14 @@ export function PaymentSettingsClient({
 
   async function submitProfile(
     input: PaymentProfileInput,
-    options?: { inDialog?: boolean },
+    options?: {
+      inDialog?: boolean;
+      silentSuccess?: boolean;
+      successMessage?: string;
+      tone?: "success" | "info";
+    },
   ): Promise<string | null> {
     if (!options?.inDialog) setError(null);
-    setNotice(null);
     const response = await savePaymentProfileAction(
       profile.revision,
       input,
@@ -83,17 +87,31 @@ export function PaymentSettingsClient({
     setProfile(response.data);
     setEditor(null);
     setError(null);
-    setNotice("Tujuan pembayaran tersimpan.");
+    if (!options?.silentSuccess) {
+      const feedbackMessage =
+        options?.successMessage ?? "Tujuan pembayaran tersimpan.";
+      if (options?.tone === "info") {
+        toast.info(feedbackMessage);
+      } else {
+        toast.success(feedbackMessage);
+      }
+    }
     return null;
   }
 
-  function save(input: PaymentProfileInput) {
+  function save(
+    input: PaymentProfileInput,
+    options?: { successMessage?: string; tone?: "success" | "info" },
+  ) {
     startTransition(async () => {
-      await submitProfile(input);
+      await submitProfile(input, options);
     });
   }
 
-  async function reloadProfile(options?: { inDialog?: boolean }): Promise<string | null> {
+  async function reloadProfile(options?: {
+    inDialog?: boolean;
+    silentSuccess?: boolean;
+  }): Promise<string | null> {
     const response = await getPaymentProfileAction().catch(() => ({
       ok: false as const,
       data: undefined,
@@ -103,6 +121,9 @@ export function PaymentSettingsClient({
       setProfile(response.data);
       setEditor(null);
       setError(null);
+      if (!options?.silentSuccess) {
+        toast.success("Pengaturan dimuat ulang.");
+      }
       return null;
     }
     const message = response.error ?? "Belum bisa memuat pengaturan.";
@@ -174,7 +195,11 @@ export function PaymentSettingsClient({
                     confirmLabel: "Muat ulang",
                     pendingLabel: "Memuat…",
                     tone: "danger",
-                    onConfirm: () => reloadProfile({ inDialog: true }),
+                    onConfirm: () =>
+                      reloadProfile({ inDialog: true, silentSuccess: true }),
+                    onSuccess: () => {
+                      toast.success("Pengaturan dimuat ulang.");
+                    },
                   });
                   return;
                 }
@@ -186,16 +211,6 @@ export function PaymentSettingsClient({
               <RefreshCw size={14} aria-hidden="true" />
               Muat ulang pengaturan
             </button>
-          </div>
-        )}
-
-        {notice && (
-          <div
-            role="status"
-            className="flex items-center gap-2.5 rounded-2xl border border-[#9ADBC3] bg-[#E6F5EF] px-4 py-3 text-sm font-bold text-[#146346]"
-          >
-            <CheckCircle2 size={18} className="shrink-0" aria-hidden="true" />
-            <span>{notice}</span>
           </div>
         )}
 
@@ -297,7 +312,6 @@ export function PaymentSettingsClient({
                             label: method.label,
                             payment: method,
                           });
-                          setNotice(null);
                         }}
                       >
                         <Pencil size={14} aria-hidden="true" />
@@ -309,10 +323,20 @@ export function PaymentSettingsClient({
                         disabled={pending || !!editor}
                         className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-[#D8E2F2] bg-white px-3 py-1.5 text-[#2855D9] hover:bg-[#E6EDFF] disabled:opacity-50 cursor-pointer"
                         onClick={() =>
-                          save({
-                            methods: profile.methods,
-                            defaultMethodId: isDefault ? null : method.id,
-                          })
+                          save(
+                            {
+                              methods: profile.methods,
+                              defaultMethodId: isDefault ? null : method.id,
+                            },
+                            isDefault
+                              ? {
+                                  successMessage: "Pilihan utama dibatalkan.",
+                                  tone: "info",
+                                }
+                              : {
+                                  successMessage: "Dijadikan pilihan utama.",
+                                },
+                          )
                         }
                       >
                         <Star size={14} aria-hidden="true" />
@@ -341,8 +365,14 @@ export function PaymentSettingsClient({
                                     ? null
                                     : profile.defaultMethodId,
                                 },
-                                { inDialog: true },
+                                {
+                                  inDialog: true,
+                                  silentSuccess: true,
+                                },
                               ),
+                            onSuccess: () => {
+                              toast.success("Tujuan pembayaran dihapus.");
+                            },
                           });
                         }}
                       >
@@ -367,7 +397,6 @@ export function PaymentSettingsClient({
                   label: "",
                   payment: { method: "bank" },
                 });
-                setNotice(null);
               }}
             >
               <Plus size={18} aria-hidden="true" />
@@ -389,14 +418,22 @@ export function PaymentSettingsClient({
                 id: editor.id,
                 label: editor.label,
               } as SavedPaymentMethod;
-              const methods = profile.methods.some(
+              const exists = profile.methods.some(
                 (saved) => saved.id === editor.id,
-              )
+              );
+              const methods = exists
                 ? profile.methods.map((saved) =>
                     saved.id === editor.id ? method : saved,
                   )
                 : [...profile.methods, method];
-              save({ methods, defaultMethodId: profile.defaultMethodId });
+              save(
+                { methods, defaultMethodId: profile.defaultMethodId },
+                {
+                  successMessage: exists
+                    ? "Tujuan pembayaran tersimpan."
+                    : "Tujuan pembayaran ditambahkan.",
+                },
+              );
             }}
           >
             <h2 className={ui.sectionTitle}>
@@ -479,6 +516,9 @@ export function PaymentSettingsClient({
                     tone: "danger",
                     onConfirm: () => {
                       setEditor(null);
+                    },
+                    onSuccess: () => {
+                      toast.info("Perubahan dibuang.");
                     },
                   });
                 }}

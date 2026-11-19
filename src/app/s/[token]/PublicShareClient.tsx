@@ -13,6 +13,7 @@ import { normalizePaymentMethods } from "@/domain/billing/payment";
 import { PaymentMethodsList } from "@/components/PaymentMethods";
 import { ParticipantAvatar } from "@/components/ParticipantBadge";
 import { ReceiptDetails } from "@/components/ReceiptDetails";
+import { useToast } from "@/components/ToastProvider";
 import ui from "@/components/product/product.module.css";
 import { formatReceiptDate } from "@/components/product/billing-feedback";
 
@@ -26,6 +27,7 @@ export function PublicShareClient({ projection: initialProjection, shareToken }:
   const [refreshing, startRefresh] = useTransition();
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState(false);
+  const toast = useToast();
   const [selectedPersonId, setSelectedPersonId] = useState<
     string | null | undefined
   >(
@@ -111,7 +113,10 @@ export function PublicShareClient({ projection: initialProjection, shareToken }:
             setRefreshError(null);
             try {
               const result = await refreshPublicShareAction(shareToken);
-              if (result.ok && result.data) setProjection(result.data);
+              if (result.ok && result.data) {
+                setProjection(result.data);
+                toast.success("Status pembayaran diperbarui.");
+              }
               else if (result.code === "LINK_UNAVAILABLE") setUnavailable(true);
               else setRefreshError(result.error ?? "Belum bisa memuat status terbaru. Coba lagi.");
             } catch { setRefreshError("Belum bisa memuat status terbaru. Periksa koneksi lalu coba lagi."); }

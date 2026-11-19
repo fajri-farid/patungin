@@ -36,6 +36,8 @@ import { MoneyInput } from "@/components/MoneyInput";
 import { StepIntro, StepHeader } from "@/components/StepHeader";
 import { OwnerReceiptPhoto } from "@/components/OwnerReceiptPhoto";
 import { useConfirmDialog } from "@/components/ConfirmDialog";
+import { useToast } from "@/components/ToastProvider";
+import { formatToastName } from "@/lib/toast-store";
 import type { ReceiptPhotoInfo } from "@/domain/receipts";
 import { useBillDraft } from "@/components/useBillDraft";
 
@@ -69,6 +71,7 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
 
   const idSeqRef = useRef<number>(100);
   const confirm = useConfirmDialog();
+  const toast = useToast();
 
   // Hitung rekonsiliasi secara langsung dengan mesin hitung domain yang sama dengan server
   const calc = useMemo(
@@ -109,6 +112,7 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
     const parent = bill.items.find((item) => item.id === parentId);
     const child = bill.items.find((item) => item.id === childId);
     if (!parent || !child) return;
+    let mergedOk = false;
     confirm.ask({
       title: `Gabungkan ke ${parent.name || "pesanan utama"}?`,
       description: (
@@ -129,7 +133,21 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
           );
           return;
         }
+        mergedOk = true;
         updateBillState(() => merged);
+      },
+      onSuccess: () => {
+        if (!mergedOk) {
+          toast.error("Pesanan sudah dibagi. Kosongkan pembagiannya dulu.");
+          return;
+        }
+        const childLabel = formatToastName(child.name, 22);
+        const parentLabel = formatToastName(parent.name, 22);
+        toast.success(
+          childLabel && parentLabel
+            ? `"${childLabel}" digabung ke "${parentLabel}".`
+            : "Pesanan berhasil digabung.",
+        );
       },
     });
   };
@@ -191,6 +209,12 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
             eligibleItemIds: adj.eligibleItemIds.filter((id) => id !== itemId),
           })),
         }));
+      },
+      onSuccess: () => {
+        const itemLabel = formatToastName(item?.name, 28);
+        toast.success(
+          itemLabel ? `Pesanan "${itemLabel}" dihapus.` : "Pesanan dihapus.",
+        );
       },
     });
   };
@@ -333,6 +357,9 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
         } catch {
           return "Tagihan belum bisa diubah. Periksa koneksi lalu coba lagi.";
         }
+      },
+      onSuccess: () => {
+        toast.info("Tagihan dibuka kembali untuk diedit.");
       },
     });
   };
@@ -874,14 +901,20 @@ export function ReviewClient({ initialBill, initialPhoto, photoNotSaved }: Revie
                       {!isLockedFinal && (
                         <button
                           type="button"
-                          onClick={() =>
+                          onClick={() => {
                             updateBillState((prev) => ({
                               ...prev,
                               adjustments: prev.adjustments.filter(
                                 (a) => a.id !== adj.id,
                               ),
-                            }))
-                          }
+                            }));
+                            const adjLabel = formatToastName(adj.name, 28);
+                            toast.success(
+                              adjLabel
+                                ? `"${adjLabel}" dihapus.`
+                                : "Biaya atau diskon dihapus.",
+                            );
+                          }}
                           className="min-h-[44px] px-2.5 py-1 rounded-xl bg-white border border-[#D8E2F2] text-xs font-semibold text-[#B42318] hover:bg-[#FDECEC] inline-flex items-center gap-1 cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />

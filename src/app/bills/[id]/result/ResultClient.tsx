@@ -68,6 +68,8 @@ import {
 } from "@/components/StepHeader";
 import { ReceiptDetails } from "@/components/ReceiptDetails";
 import { useConfirmDialog } from "@/components/ConfirmDialog";
+import { useToast } from "@/components/ToastProvider";
+import { formatToastName } from "@/lib/toast-store";
 import {
   editablePaymentMethod,
   normalizePaymentMethods,
@@ -138,6 +140,7 @@ export function ResultClient({
     latestBillRef.current = bill;
   }, [bill]);
   const confirm = useConfirmDialog();
+  const toast = useToast();
   const [trackingError, setTrackingError] = useState<{ message: string; participantId?: string; intent?: TrackingMutation; reload?: boolean } | null>(null);
 
   const saveTracking = async (intent: TrackingMutation): Promise<string | null> => {
@@ -155,6 +158,43 @@ export function ResultClient({
       const result = await paymentTrackingAction(intent);
       if (result.ok && result.data) {
         setBill(result.data);
+        if (!intent.participantId) {
+          toast.success("Pencatatan pembayaran aktif.");
+        } else {
+          const personName = formatToastName(
+            result.data.participants.find((p) => p.id === intent.participantId)
+              ?.name,
+            26,
+          );
+          if (intent.status === "paid") {
+            const updatedView = billTrackingView(result.data);
+            if (
+              updatedView &&
+              updatedView.state === "active" &&
+              updatedView.count > 0 &&
+              updatedView.paidCount === updatedView.count
+            ) {
+              toast.success("Semua teman sudah bayar!");
+            } else {
+              toast.success(
+                personName
+                  ? `${personName} ditandai lunas.`
+                  : "Ditandai lunas.",
+              );
+            }
+          } else {
+            const message = personName
+              ? `${personName} ditandai belum bayar.`
+              : "Ditandai belum bayar.";
+            if (typeof window !== "undefined") {
+              window.requestAnimationFrame(() => {
+                toast.info(message);
+              });
+            } else {
+              toast.info(message);
+            }
+          }
+        }
         return null;
       }
       if (result.code === "STALE_REVISION" || result.code === "FINALIZATION_CHANGED") {
@@ -399,11 +439,15 @@ export function ResultClient({
         if (published.ok && published.data) {
           setBill(published.data.bill);
           setShareToken(published.data.shareToken);
+          toast.success("Tagihan selesai & siap dibagikan.");
         } else {
           setActionError(
             "Tagihan tersimpan, tetapi link belum berhasil dibuat. Tekan Buat link untuk mencoba lagi.",
           );
+          toast.info("Tagihan tersimpan, tapi link belum terbuat.");
         }
+      } else {
+        toast.success("Tagihan selesai & siap dibagikan.");
       }
       window.scrollTo({ top: 0, behavior: "auto" });
     });
@@ -427,6 +471,7 @@ export function ResultClient({
       }
       setBill(res.data.bill);
       setShareToken(res.data.shareToken);
+      toast.success("Link tagihan siap dibagikan.");
     });
   };
 
@@ -452,6 +497,9 @@ export function ResultClient({
         } catch {
           return "Link belum bisa dinonaktifkan. Periksa koneksi lalu coba lagi.";
         }
+      },
+      onSuccess: () => {
+        toast.info("Link tagihan dimatikan.");
       },
     });
   };
@@ -496,6 +544,9 @@ export function ResultClient({
           return "Tagihan belum bisa diubah. Periksa koneksi lalu coba lagi.";
         }
       },
+      onSuccess: () => {
+        toast.info("Tagihan dibuka kembali untuk diedit.");
+      },
     });
   };
 
@@ -507,9 +558,11 @@ export function ResultClient({
       setActionError(
         "Pesan belum bisa disalin. Pilih teks ringkasan, lalu salin lewat menu browser.",
       );
+      toast.error("Pesan belum bisa disalin.");
       return;
     }
     setCopiedSummary(true);
+    toast.success("Pesan ringkasan disalin.");
     setTimeout(() => setCopiedSummary(false), 2500);
   };
 
@@ -522,9 +575,11 @@ export function ResultClient({
       setActionError(
         "Link belum bisa disalin. Pilih link di bawah, lalu salin lewat menu browser.",
       );
+      toast.error("Link belum bisa disalin.");
       return;
     }
     setCopiedLink(true);
+    toast.success("Link tagihan disalin.");
     setTimeout(() => setCopiedLink(false), 2500);
   };
 
@@ -546,6 +601,10 @@ export function ResultClient({
           seen.add(key);
           return true;
         });
+        if (methods.length > 0 && additions.length === 0) {
+          toast.info("Tujuan pembayaran tersebut sudah ada di daftar.");
+          return;
+        }
         if (paymentMethods.length + additions.length > 10) {
           setPaymentError("Maksimal 10 tujuan pembayaran per tagihan.");
           return;
@@ -553,6 +612,13 @@ export function ResultClient({
         setPaymentMethods([...paymentMethods, ...additions]);
         setPaymentError(null);
         setSaveStatus("idle");
+        if (additions.length > 0) {
+          toast.success(
+            additions.length === 1
+              ? "Tujuan pembayaran ditambahkan."
+              : `${additions.length} tujuan pembayaran ditambahkan.`,
+          );
+        }
       }}
       onChange={(value) => {
         setPaymentMethods(value);
