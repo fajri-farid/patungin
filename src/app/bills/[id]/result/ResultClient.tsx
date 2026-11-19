@@ -44,6 +44,7 @@ import {
   buildReceiptDetails,
   calculateBill,
   formatSummaryText,
+  type SummaryDetailLevel,
 } from "@/domain/billing/calculation";
 import { ActionBar } from "@/components/product/ActionBar";
 import dynamic from "next/dynamic";
@@ -66,6 +67,7 @@ import {
   type SaveStatus,
 } from "@/components/StepHeader";
 import { ReceiptDetails } from "@/components/ReceiptDetails";
+import { useConfirmDialog } from "@/components/ConfirmDialog";
 import {
   editablePaymentMethod,
   normalizePaymentMethods,
@@ -120,6 +122,9 @@ export function ResultClient({
     Record<string, boolean>
   >({});
   const [copiedSummary, setCopiedSummary] = useState(false);
+  const [summaryDetailLevel, setSummaryDetailLevel] =
+    useState<SummaryDetailLevel>("summary");
+  const [summaryPreviewOpen, setSummaryPreviewOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [showQr, setShowQr] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
@@ -127,31 +132,52 @@ export function ResultClient({
   const [shareError, setShareError] = useState<string | null>(null);
   const paymentSaveInFlight = useRef(false);
   const trackingInFlight = useRef(false);
+  const [trackingBusy, setTrackingBusy] = useState(false);
+  const latestBillRef = useRef(bill);
+  useEffect(() => {
+    latestBillRef.current = bill;
+  }, [bill]);
+  const confirm = useConfirmDialog();
   const [trackingError, setTrackingError] = useState<{ message: string; participantId?: string; intent?: TrackingMutation; reload?: boolean } | null>(null);
 
-  const saveTracking = (intent: TrackingMutation) => {
-    if (trackingInFlight.current) return;
-    if (intent.billId !== bill.id || intent.finalizationId !== bill.currentFinalizationId || intent.expectedRevision !== bill.revision) {
-      setTrackingError({ message: "Ada perubahan terbaru. Muat ulang dulu.", participantId: intent.participantId, reload: true });
-      return;
+  const saveTracking = async (intent: TrackingMutation): Promise<string | null> => {
+    if (trackingInFlight.current) return null;
+    const currentBill = latestBillRef.current;
+    if (intent.billId !== currentBill.id || intent.finalizationId !== currentBill.currentFinalizationId || intent.expectedRevision !== currentBill.revision) {
+      const message = "Ada perubahan terbaru. Muat ulang dulu.";
+      setTrackingError({ message, participantId: intent.participantId, reload: true });
+      return message;
     }
     trackingInFlight.current = true;
+    setTrackingBusy(true);
     setTrackingError(null);
-    startTransition(async () => {
-      try {
-        const result = await paymentTrackingAction(intent);
-        if (result.ok && result.data) { setBill(result.data); return; }
-        if (result.code === "STALE_REVISION" || result.code === "FINALIZATION_CHANGED") {
-          setTrackingError({ message: "Ada perubahan terbaru. Muat ulang dulu.", participantId: intent.participantId, reload: true });
-        } else if (result.code === "INTERNAL_ERROR" || !result.code) {
-          setTrackingError({ message: "Belum tersimpan. Coba lagi.", participantId: intent.participantId, intent });
-        } else {
-          setTrackingError({ message: result.error ?? "Pembayaran belum bisa disimpan. Muat ulang halaman.", participantId: intent.participantId, reload: true });
-        }
-      } catch {
-        setTrackingError({ message: "Belum tersimpan. Coba lagi.", participantId: intent.participantId, intent });
-      } finally { trackingInFlight.current = false; }
-    });
+    try {
+      const result = await paymentTrackingAction(intent);
+      if (result.ok && result.data) {
+        setBill(result.data);
+        return null;
+      }
+      if (result.code === "STALE_REVISION" || result.code === "FINALIZATION_CHANGED") {
+        const message = "Ada perubahan terbaru. Muat ulang dulu.";
+        setTrackingError({ message, participantId: intent.participantId, reload: true });
+        return message;
+      }
+      if (result.code === "INTERNAL_ERROR" || !result.code) {
+        const message = "Belum tersimpan. Coba lagi.";
+        setTrackingError({ message, participantId: intent.participantId, intent });
+        return message;
+      }
+      const message = result.error ?? "Pembayaran belum bisa disimpan. Muat ulang halaman.";
+      setTrackingError({ message, participantId: intent.participantId, reload: true });
+      return message;
+    } catch {
+      const message = "Belum tersimpan. Coba lagi.";
+      setTrackingError({ message, participantId: intent.participantId, intent });
+      return message;
+    } finally {
+      trackingInFlight.current = false;
+      setTrackingBusy(false);
+    }
   };
 
   useEffect(() => {
@@ -223,6 +249,8 @@ export function ResultClient({
         merchant: bill.merchant,
         grandTotal: calc.computedGrandTotal,
         payerName: payer?.name ?? "Yang bayar duluan",
+        payerIsHost: bill.payerParticipantId === "p-host-1",
+        detailLevel: summaryDetailLevel,
         participants: detailedShares,
         paymentMethods: savedPaymentMethods,
         shareUrl,
@@ -230,13 +258,18 @@ export function ResultClient({
     [
       bill.title,
       bill.merchant,
+      bill.payerParticipantId,
       calc.computedGrandTotal,
       payer?.name,
+      summaryDetailLevel,
       detailedShares,
       savedPaymentMethods,
       shareUrl,
     ],
   );
+  const isLongWhatsAppSummary =
+    summaryDetailLevel === "itemized" &&
+    encodeURIComponent(summaryText).length > 1800;
 
   const blockingIssues = calc.issues.filter((i) => i.severity === "error");
   const hasBlockingIssues = blockingIssues.some(
@@ -398,52 +431,71 @@ export function ResultClient({
   };
 
   const handleRevokeShareLink = () => {
-    if (
-      !window.confirm(
-        "Nonaktifkan link ini? Teman tidak bisa lagi membuka rincian dari link tersebut.",
-      )
-    ) {
-      return;
-    }
-    setActionError(null);
-    runAction(async () => {
-      const res = await revokeShareAction({ billId: bill.id });
-      if (!res.ok || !res.data) {
-        setActionError(res.error ?? "Link belum bisa dinonaktifkan. Coba lagi.");
-        return;
-      }
-      setBill(res.data);
-      setShareToken(null);
-      setShowQr(false);
+    confirm.ask({
+      title: "Nonaktifkan link ini?",
+      description:
+        "Teman tidak bisa lagi membuka rincian dari link yang sudah dibagikan.",
+      confirmLabel: "Nonaktifkan",
+      pendingLabel: "Menonaktifkan…",
+      tone: "danger",
+      onConfirm: async () => {
+        setActionError(null);
+        try {
+          const res = await revokeShareAction({ billId: bill.id });
+          if (!res.ok || !res.data) {
+            return res.error ?? "Link belum bisa dinonaktifkan. Coba lagi.";
+          }
+          setBill(res.data);
+          setShareToken(null);
+          setShowQr(false);
+          return null;
+        } catch {
+          return "Link belum bisa dinonaktifkan. Periksa koneksi lalu coba lagi.";
+        }
+      },
     });
   };
 
   const handleReopenToEdit = () => {
     const tracking = billTrackingView(bill);
-    if (tracking?.paidCount) { setActionError("Ada yang sudah ditandai lunas. Jika itu keliru, hapus centangnya sebelum mengubah tagihan."); return; }
-    if (
-      !window.confirm(
-        "Ubah tagihan ini? Status pembayaran akan dikosongkan dan link lama tidak bisa dibuka lagi.",
-      )
-    ) {
+    if (tracking?.paidCount) {
+      setActionError(
+        "Ada yang sudah ditandai lunas. Jika itu keliru, hapus centangnya sebelum mengubah tagihan.",
+      );
       return;
     }
-    setActionError(null);
-    runAction(async () => {
-      const res = await reopenBillAction({
-        billId: bill.id,
-        expectedRevision: bill.revision,
-      });
-      if (!res.ok || !res.data) {
-        setActionError(res.error ?? "Tagihan belum bisa diubah. Coba lagi.");
-        return;
-      }
-      setBill(res.data);
-      setPaymentMethods(normalizePaymentMethods(res.data.paymentMethods, res.data.paymentNote).map(editablePaymentMethod));
-      setPaymentError(null);
-      setSaveStatus("saved");
-      setShareToken(null);
-      setShowQr(false);
+    confirm.ask({
+      title: "Ubah tagihan ini?",
+      description:
+        "Status pembayaran akan dikosongkan dan link lama tidak bisa dibuka lagi.",
+      confirmLabel: "Ubah tagihan",
+      pendingLabel: "Membuka tagihan…",
+      tone: "danger",
+      onConfirm: async () => {
+        setActionError(null);
+        try {
+          const res = await reopenBillAction({
+            billId: bill.id,
+            expectedRevision: latestBillRef.current.revision,
+          });
+          if (!res.ok || !res.data) {
+            return res.error ?? "Tagihan belum bisa diubah. Coba lagi.";
+          }
+          setBill(res.data);
+          setPaymentMethods(
+            normalizePaymentMethods(res.data.paymentMethods, res.data.paymentNote).map(
+              editablePaymentMethod,
+            ),
+          );
+          setPaymentError(null);
+          setSaveStatus("saved");
+          setShareToken(null);
+          setShowQr(false);
+          return null;
+        } catch {
+          return "Tagihan belum bisa diubah. Periksa koneksi lalu coba lagi.";
+        }
+      },
     });
   };
 
@@ -668,7 +720,7 @@ export function ResultClient({
             <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-[#D8E2F2]">
               <button
                 type="button"
-                disabled={isPending}
+                disabled={isPending || confirm.busy}
                 onClick={handleReopenToEdit}
                 className="min-h-[40px] px-3.5 py-1.5 rounded-xl bg-[#F4F7FC] hover:bg-[#EAF0FA] border border-[#D8E2F2] text-xs font-bold text-[#17233B] inline-flex items-center gap-1.5 cursor-pointer transition-colors"
               >
@@ -684,10 +736,11 @@ export function ResultClient({
         </section>
 
         {bill.status === "finalized" && billTrackingView(bill) && <PaymentTrackingPanel
-          view={billTrackingView(bill)!} people={detailedShares} busy={isPending}
-          error={trackingError ? { ...trackingError, action: trackingError.intent ? () => saveTracking(trackingError.intent!) : trackingError.reload ? () => window.location.reload() : undefined, actionLabel: trackingError.intent ? "Coba lagi" : "Muat ulang" } : null}
+          view={billTrackingView(bill)!} people={detailedShares} busy={isPending || trackingBusy || confirm.busy}
+          error={trackingError ? { ...trackingError, action: trackingError.intent ? () => { void saveTracking(trackingError.intent!); } : trackingError.reload ? () => window.location.reload() : undefined, actionLabel: trackingError.intent ? "Coba lagi" : "Muat ulang" } : null}
           onChange={(participantId, status) => {
-            saveTracking({ billId: bill.id, expectedRevision: bill.revision, finalizationId: bill.currentFinalizationId!, ...(participantId ? { participantId, status } : {}) });
+            const currentBill = latestBillRef.current;
+            return saveTracking({ billId: currentBill.id, expectedRevision: currentBill.revision, finalizationId: currentBill.currentFinalizationId!, ...(participantId ? { participantId, status } : {}) });
           }} />}
 
         {bill.status === "finalized" && paymentSection}
@@ -712,6 +765,61 @@ export function ResultClient({
                 </p>
               </div>
             </div>
+
+            <div className="space-y-2">
+              <div
+                role="group"
+                aria-label="Format pesan WhatsApp"
+                className="grid grid-cols-2 gap-1 p-1 rounded-2xl bg-[#F4F7FC] border border-[#D8E2F2]"
+              >
+                <button
+                  type="button"
+                  aria-pressed={summaryDetailLevel === "summary"}
+                  onClick={() => {
+                    setSummaryDetailLevel("summary");
+                    setCopiedSummary(false);
+                  }}
+                  className={`min-h-[40px] px-3 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                    summaryDetailLevel === "summary"
+                      ? "bg-white text-[#17233B] border border-[#D8E2F2] shadow-2xs"
+                      : "text-[#4A5B7C] hover:text-[#17233B]"
+                  }`}
+                >
+                  Ringkas
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={summaryDetailLevel === "itemized"}
+                  onClick={() => {
+                    setSummaryDetailLevel("itemized");
+                    setSummaryPreviewOpen(true);
+                    setCopiedSummary(false);
+                  }}
+                  className={`min-h-[40px] px-3 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                    summaryDetailLevel === "itemized"
+                      ? "bg-white text-[#17233B] border border-[#D8E2F2] shadow-2xs"
+                      : "text-[#4A5B7C] hover:text-[#17233B]"
+                  }`}
+                >
+                  Dengan rincian
+                </button>
+              </div>
+              <p className="text-[11px] text-[#4A5B7C]">
+                {summaryDetailLevel === "summary"
+                  ? "Menampilkan total bayar per orang."
+                  : "Menampilkan menu, diskon, dan biaya tiap orang."}
+              </p>
+            </div>
+
+            {isLongWhatsAppSummary && (
+              <div
+                role="status"
+                className="p-3 rounded-2xl bg-[#FFF3E6] border border-[#F5CBA3] text-xs font-medium text-[#9A4A12]"
+              >
+                Pesannya cukup panjang. Pakai <strong>Salin pesan</strong> agar
+                seluruh rincian ikut terbawa.
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-2.5">
               <a
@@ -743,7 +851,13 @@ export function ResultClient({
               </button>
             </div>
 
-            <details className="rounded-2xl bg-[#F4F7FC] border border-[#D8E2F2] px-3.5 py-2">
+            <details
+              open={summaryPreviewOpen}
+              onToggle={(event) => {
+                setSummaryPreviewOpen(event.currentTarget.open);
+              }}
+              className="rounded-2xl bg-[#F4F7FC] border border-[#D8E2F2] px-3.5 py-2"
+            >
               <summary className="min-h-[38px] flex items-center text-xs font-bold text-[#2855D9] cursor-pointer">
                 Lihat isi pesan
               </summary>
@@ -1069,7 +1183,7 @@ export function ResultClient({
 
                   <button
                     type="button"
-                    disabled={isPending}
+                    disabled={isPending || confirm.busy}
                     onClick={handleRevokeShareLink}
                     className="min-h-11 px-2 py-2 rounded-xl bg-[#FDECEC] hover:bg-[#FAD4D4] text-[#B42318] font-bold text-xs inline-flex items-center justify-center gap-1.5 cursor-pointer"
                   >
@@ -1111,6 +1225,7 @@ export function ResultClient({
           onClick={handleConfirmReviewAndFinalize}
         />
       )}
+      {confirm.dialog}
     </div>
   );
 }

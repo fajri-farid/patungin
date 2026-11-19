@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useId, useRef } from "react";
 import { AlertCircle, Check, CheckCircle2, RefreshCw, Wallet, Clock3 } from "lucide-react";
@@ -8,6 +8,7 @@ import {
   type PaymentObligation,
 } from "@/domain/billing/tracking";
 import { formatRupiah } from "@/domain/billing/money";
+import { useConfirmDialog } from "./ConfirmDialog";
 import ui from "@/components/product/product.module.css";
 import styles from "./payment-tracking.module.css";
 
@@ -40,13 +41,21 @@ export function PaymentTrackingPanel({
   view: TrackingView;
   people: Person[];
   busy?: boolean;
-  onChange?: (participantId?: string, status?: "paid" | "unpaid") => void;
+  onChange?: (
+    participantId?: string,
+    status?: "paid" | "unpaid",
+  ) => void | string | null | Promise<void | string | null>;
   onRefresh?: () => void;
   error?: { message: string; participantId?: string; action?: () => void; actionLabel?: string } | null;
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
   const feedbackId = useId();
   const previousState = useRef(view.state);
+  const confirm = useConfirmDialog();
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
   useEffect(() => {
     if (
       onChange &&
@@ -205,14 +214,26 @@ export function PaymentTrackingPanel({
                         aria-describedby={error?.participantId === person.id ? feedbackId : undefined}
                         onChange={(event) => {
                           const nextPaid = event.currentTarget.checked;
-                          if (
-                            !nextPaid &&
-                            !window.confirm(
-                              `Tandai ${person.name} sebagai belum bayar?`,
-                            )
-                          )
+                          if (!nextPaid) {
+                            confirm.ask({
+                              title: "Batalkan status lunas?",
+                              description: (
+                                <>
+                                  <strong>{person.name}</strong> akan ditandai
+                                  belum bayar lagi. Teman yang membuka link akan
+                                  melihat status terbarunya.
+                                </>
+                              ),
+                              confirmLabel: "Tandai belum bayar",
+                              cancelLabel: "Tidak jadi",
+                              pendingLabel: "Menyimpan…",
+                              tone: "primary",
+                              onConfirm: () =>
+                                onChangeRef.current?.(person.id, "unpaid"),
+                            });
                             return;
-                          onChange(person.id, nextPaid ? "paid" : "unpaid");
+                          }
+                          void onChange(person.id, "paid");
                         }}
                       />
                       {content}
@@ -302,6 +323,7 @@ export function PaymentTrackingPanel({
           )}
         </div>
       )}
+      {confirm.dialog}
     </section>
   );
 }

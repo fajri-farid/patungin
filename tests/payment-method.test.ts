@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { editablePaymentMethod, normalizePaymentNote, normalizePaymentMethods } from "../src/domain/billing/payment";
 import { buildDetailedParticipantShares, calculateBill, formatSummaryText } from "../src/domain/billing/calculation";
 import { GOLDEN_FIXTURES } from "../src/domain/billing/fixtures";
-import type { PaymentMethodNote } from "../src/domain/billing/types";
+import type { BillCalculationInput, PaymentMethodNote } from "../src/domain/billing/types";
 import { createDraftBill, finalizeBillOnServer, publishBillShareLink, resolvePublicShareToken, saveBillDraft } from "../src/server/store/repository";
 
 function summary(paymentNote: PaymentMethodNote) {
@@ -143,5 +143,158 @@ describe("Manual transfer and QRIS instructions", () => {
       expectedRevision: draft.revision,
       paymentNote: { method: "unknown" } as unknown as PaymentMethodNote,
     })).rejects.toMatchObject({ statusCode: 422, code: "INVALID_PAYMENT_NOTE" });
+  });
+});
+
+describe("WhatsApp summary detail levels and payer phrasing", () => {
+  const sampleInput = (payerParticipantId: string): BillCalculationInput => ({
+    currency: "IDR",
+    participants: [
+      { id: "p-host-1", allocationOrder: 0, name: "Ayu" },
+      { id: "p-2", allocationOrder: 1, name: "Bima" },
+      { id: "p-3", allocationOrder: 2, name: "Dina" },
+    ],
+    payerParticipantId,
+    items: [
+      {
+        id: "item-1",
+        allocationOrder: 0,
+        name: "Bakmi Ayam",
+        quantity: 2,
+        lineAmount: 50_000,
+        reviewConfirmed: true,
+      },
+      {
+        id: "item-2",
+        allocationOrder: 1,
+        name: "Kentang Goreng",
+        quantity: 1,
+        lineAmount: 20_000,
+        reviewConfirmed: true,
+      },
+    ],
+    allocations: [
+      { itemId: "item-1", mode: "units", unitCounts: { "p-host-1": 1, "p-2": 1 } },
+      { itemId: "item-2", mode: "shared", participantIds: ["p-host-1", "p-2"] },
+    ],
+    adjustments: [
+      {
+        id: "adj-disc",
+        allocationOrder: 0,
+        name: "Diskon promo",
+        kind: "bill-discount",
+        amount: 7_000,
+        amountSource: "observed",
+        mode: "added",
+        basis: "gross",
+        eligibleItemIds: ["item-1", "item-2"],
+        scopeConfirmed: true,
+        reviewConfirmed: true,
+      },
+      {
+        id: "adj-svc",
+        allocationOrder: 1,
+        name: "Biaya layanan 5%",
+        kind: "service",
+        amount: 3_500,
+        amountSource: "observed",
+        mode: "added",
+        basis: "gross",
+        eligibleItemIds: ["item-1", "item-2"],
+        scopeConfirmed: true,
+        reviewConfirmed: true,
+      },
+      {
+        id: "adj-tax",
+        allocationOrder: 2,
+        name: "Pajak 10%",
+        kind: "tax",
+        amount: 6_045,
+        amountSource: "observed",
+        mode: "included",
+        basis: "net",
+        eligibleItemIds: ["item-1", "item-2"],
+        scopeConfirmed: true,
+        reviewConfirmed: true,
+      },
+    ],
+    confirmedGrandTotal: 66_500,
+  });
+
+  it("formats itemized WhatsApp text with units, shared splits, adjustments, Rp0 handling, and share URL", () => {
+    const input = sampleInput("p-host-1");
+    const result = calculateBill(input);
+    const participants = buildDetailedParticipantShares(input, result);
+    const text = formatSummaryText({
+      title: "Makan Siang Kantor",
+      grandTotal: result.computedGrandTotal,
+      payerName: "Ayu",
+      payerIsHost: true,
+      detailLevel: "itemized",
+      participants,
+      paymentMethods: [
+        { method: "bank", bankOrWalletName: "BCA", accountNumber: "1234567890", accountHolderName: "Ayu" },
+      ],
+      shareUrl: "https://patungin.app/s/abc123",
+    });
+
+    expect(text).toContain("*Makan Siang Kantor*");
+    expect(text).toContain("Total *Rp66.500*, sudah aku bayar dulu ya.");
+    expect(text).toContain("- Aku: *Rp33.250* (sudah dibayar)");
+    expect(text).toContain("- Bima: *Rp33.250*");
+    expect(text).toContain("  · 1x Bakmi Ayam: Rp25.000");
+    expect(text).toContain("  · Kentang Goreng (bagi 2 orang): Rp10.000");
+    expect(text).toContain("  · Diskon promo: -Rp3.500");
+    expect(text).toContain("  · Biaya layanan 5%: +Rp1.750");
+    expect(text).toMatch(/· Pajak 10%: Rp3\.02[23] \(sudah termasuk\)/);
+    expect(text).toContain("- Dina: *Rp0* (tidak perlu bayar)\n\nRekening bank: *BCA · 1234567890 · a.n. Ayu*");
+    expect(text).toContain("Rincian: https://patungin.app/s/abc123");
+  });
+
+  it("uses the payer name instead of Aku when payerIsHost is false across summary and itemized modes", () => {
+    const input = sampleInput("p-2");
+    const result = calculateBill(input);
+    const participants = buildDetailedParticipantShares(input, result);
+
+    const summaryOnly = formatSummaryText({
+      title: "Patungan makan",
+      merchant: "Bakmi GM",
+      grandTotal: result.computedGrandTotal,
+      payerName: "Bima",
+      payerIsHost: false,
+      detailLevel: "summary",
+      participants,
+      paymentMethods: [],
+    });
+
+    expect(summaryOnly).toContain("*Bakmi GM*");
+    expect(summaryOnly).toContain("Total *Rp66.500*, sudah dibayar dulu sama *Bima* ya.");
+    expect(summaryOnly).toContain("- Ayu: *Rp33.250*");
+    expect(summaryOnly).toContain("- Bima: *Rp33.250* (sudah dibayar)");
+    expect(summaryOnly).toContain("Bisa transfer ke *Bima* ya.");
+    expect(summaryOnly.toLowerCase()).not.toMatch(/\baku\b/);
+
+    const itemizedMulti = formatSummaryText({
+      title: "Bakmi GM",
+      grandTotal: result.computedGrandTotal,
+      payerName: "Bima",
+      payerIsHost: false,
+      detailLevel: "itemized",
+      participants,
+      paymentMethods: [
+        { method: "qris" },
+        {
+          method: "ewallet",
+          bankOrWalletName: "GoPay",
+          accountNumber: "08123456789",
+          accountHolderName: "Bima",
+        },
+      ],
+    });
+
+    expect(itemizedMulti).toContain("Bisa bayar ke *Bima* lewat salah satu ini:");
+    expect(itemizedMulti).toContain("Bayar lewat *QRIS* ya. Kode QR-nya minta di chat ke *Bima* ya.");
+    expect(itemizedMulti).toContain("E-wallet: *GoPay · 08123456789 · a.n. Bima*");
+    expect(itemizedMulti.toLowerCase()).not.toMatch(/\baku\b/);
   });
 });
