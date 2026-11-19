@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Manrope, Source_Sans_3 } from "next/font/google";
 import { PrivateAnalytics } from "@/components/PrivateAnalytics";
+import { ToastProvider } from "@/components/ToastProvider";
 import "./globals.css";
 
 const manrope = Manrope({
@@ -46,7 +47,7 @@ export default function RootLayout({
       className={`${manrope.variable} ${sourceSans.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-[#F4F7FC] text-[#17233B]">
-        {children}
+        <ToastProvider>{children}</ToastProvider>
         <PrivateAnalytics />
       </body>
     </html>

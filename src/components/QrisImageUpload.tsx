@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { MAX_QRIS_BYTES } from "@/domain/qris";
 import { QrisImage } from "./QrisImage";
+import { useToast } from "./ToastProvider";
 import ui from "./product/product.module.css";
 
 export function QrisImageUpload({
@@ -31,6 +32,7 @@ export function QrisImageUpload({
   const [error, setError] = useState<string | null>(null);
   const guard = useRef(false);
   const input = useRef<HTMLInputElement>(null);
+  const toast = useToast();
 
   async function upload(file: File) {
     if (guard.current || disabled) return;
@@ -64,6 +66,7 @@ export function QrisImageUpload({
       if (!response.ok || !result.ok || !result.data)
         throw new Error(result.error ?? "Gambar QRIS belum tersimpan.");
       onChange(result.data.id);
+      toast.success("Gambar QRIS tersimpan.");
     } catch (error) {
       setError(
         error instanceof Error
@@ -170,7 +173,10 @@ export function QrisImageUpload({
             type="button"
             disabled={disabled || pending}
             className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-[#D8E2F2] bg-white px-3.5 py-2 text-[#B42318] hover:border-[#F5B5B5] hover:bg-[#FDECEC] cursor-pointer"
-            onClick={() => onChange(undefined)}
+            onClick={() => {
+              onChange(undefined);
+              toast.info("Gambar QRIS dihapus.");
+            }}
           >
             <Trash2 size={14} aria-hidden="true" />
             Hapus gambar dari tujuan ini

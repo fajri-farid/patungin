@@ -38,6 +38,8 @@ import {
 import { StepIntro, StepHeader } from "@/components/StepHeader";
 import { useBillDraft } from "@/components/useBillDraft";
 import { useConfirmDialog } from "@/components/ConfirmDialog";
+import { useToast } from "@/components/ToastProvider";
+import { formatToastName } from "@/lib/toast-store";
 
 interface SplitClientProps {
   initialBill: BillDocument;
@@ -91,6 +93,7 @@ export function SplitClient({ initialBill }: SplitClientProps) {
 
   const participantSeqRef = useRef<number>(100);
   const confirm = useConfirmDialog();
+  const toast = useToast();
 
   const isLockedFinal = bill.status === "finalized";
 
@@ -250,6 +253,8 @@ export function SplitClient({ initialBill }: SplitClientProps) {
       participants: [...prev.participants, newParticipant],
       payerParticipantId: prev.payerParticipantId ?? newParticipant.id,
     }));
+    const addedLabel = formatToastName(newParticipant.name, 28);
+    toast.success(addedLabel ? `${addedLabel} ditambahkan.` : "Teman ditambahkan.");
   };
 
   const handleRemoveParticipant = (participantId: string) => {
@@ -301,6 +306,10 @@ export function SplitClient({ initialBill }: SplitClientProps) {
             allocations: cleanedAllocations,
           };
         });
+      },
+      onSuccess: () => {
+        const removedLabel = formatToastName(targetName, 28);
+        toast.info(`${removedLabel || "Teman"} dikeluarkan dari tagihan.`);
       },
     });
   };
@@ -363,6 +372,7 @@ export function SplitClient({ initialBill }: SplitClientProps) {
     );
     if (!hasExistingAllocation) {
       applyEqualShare();
+      toast.success("Semua pesanan dibagi rata.");
       return;
     }
 
@@ -373,6 +383,9 @@ export function SplitClient({ initialBill }: SplitClientProps) {
       confirmLabel: "Ya, bagi rata",
       tone: "primary",
       onConfirm: applyEqualShare,
+      onSuccess: () => {
+        toast.success("Semua pesanan dibagi rata.");
+      },
     });
   };
 
@@ -563,11 +576,20 @@ export function SplitClient({ initialBill }: SplitClientProps) {
                         selected={p.id === bill.payerParticipantId}
                         isPayer={p.id === bill.payerParticipantId}
                         onClick={() => {
+                          const changed = p.id !== bill.payerParticipantId;
                           updateBillState((prev) => ({
                             ...prev,
                             payerParticipantId: p.id,
                           }));
                           setShowPayerSelector(false);
+                          if (changed) {
+                            const payerLabel = formatToastName(p.name, 26);
+                            toast.info(
+                              payerLabel
+                                ? `${payerLabel} jadi yang bayar duluan.`
+                                : "Yang bayar duluan diperbarui.",
+                            );
+                          }
                         }}
                       />
                     );

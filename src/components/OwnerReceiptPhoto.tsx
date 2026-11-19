@@ -10,6 +10,7 @@ import { forgetReceiptPreview, useReceiptPreview } from "@/lib/local-receipt-pre
 import { requestJson } from "@/lib/request-json";
 import { SlowOperationNotice } from "./SlowOperationNotice";
 import { useConfirmDialog } from "./ConfirmDialog";
+import { useToast } from "./ToastProvider";
 import ui from "./product/product.module.css";
 
 export function OwnerReceiptPhoto({
@@ -26,6 +27,7 @@ export function OwnerReceiptPhoto({
   const [error, setError] = useState<string | null>(null);
   const guard = useRef(false);
   const confirm = useConfirmDialog();
+  const toast = useToast();
   const enabled = photo.status !== "disabled";
   const preview = useReceiptPreview(bill.id);
   const localOnly = !bill.receiptPhotoId &&
@@ -94,6 +96,9 @@ export function OwnerReceiptPhoto({
           onBusy?.(false);
         }
       },
+      onSuccess: () => {
+        toast.success("Foto struk dihapus.");
+      },
     });
   }
 
@@ -126,7 +131,10 @@ export function OwnerReceiptPhoto({
           {localOnly && (
             <button type="button" disabled={busy}
               className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-[#F5B5B5] bg-white px-3 py-2 text-[#B42318] hover:bg-[#FDECEC] disabled:opacity-50 cursor-pointer"
-              onClick={() => forgetReceiptPreview(bill.id)}>
+              onClick={() => {
+                forgetReceiptPreview(bill.id);
+                toast.success("Foto struk di tab ini dihapus.");
+              }}>
               <Trash2 size={14} aria-hidden="true" /> Hapus foto di tab ini
             </button>
           )}
